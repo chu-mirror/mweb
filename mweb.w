@@ -54,8 +54,8 @@ which used by \.{GIT}.
 int
 main(int argc, char **argv)
 {
-	int fd_in;
 	int t_flag = 1, w_flag = 1;
+	ifile *src; /* the source file */
 
 	@<parse command line@>@;
 	@<initialize global variables@>@;
@@ -72,31 +72,30 @@ main(int argc, char **argv)
 @* Usage. \.{MWEB} is invoked from command line, accept a file name as the argument.
 Unlike \.{CWEB} and \.{NOWEB}, I do not divide it into two parts.
 Each invoking will do both tangling and weaving.
-This behaviour can be changed by rename the final executable file,
+This behaviour can be changed by renaming the final executable file,
 you can create links to achieve same effect.
 
 @<parse command line@>=
 {
-	char *name;
+	char *cmd;
 	int i;
 
 	if (argc != 2) {
 		err_quit("usage: %s file", argv[0]);
 	}
 
-	fd_in = openat(AT_FDCWD, argv[1], O_RDONLY);
-	if (fd_in == -1) {
-		err_sys("failed to open file %s", argv[1]);
+	src = ifile_open(argv[1]);
+
+	cmd = strrchr(argv[0], '/');
+	if (cmd) {
+		cmd++;
+	} else {
+		cmd = argv[0];
 	}
 
-	for (name = argv[0], i = 0; argv[0][i]; i++) {
-		if (argv[0][i] == '/') {
-			name = &argv[0][i+1];
-		}
-	}
-	if (strcmp(name, "mtangle") == 0) {
+	if (strcmp(cmd, "mtangle") == 0) {
 		w_flag = 0;
-	} else if (strcmp(name, "mweave") == 0) {
+	} else if (strcmp(cmd, "mweave") == 0) {
 		t_flag = 0;
 	}
 }
@@ -120,33 +119,119 @@ buffer_end = &buffer[0];
 {
 	ssize_t rd, fr;
 	fr = BUFFER_LENGTH; /* remaining free space */
-	do {
-		rd = read(fd_in, buffer_end, fr);
-		if (rd == -1) {
-			err_sys("failed to read file %s", argv[1]);
-		} else {
-			buffer_end += rd;
-			fr -= rd;
-		}
-		if (fr == 0) {
-			err_quit("file %s is too big", argv[1]);
-		}
-	} while (rd);
+	while (readline(src)) {
+		inform(line_buffer);
+	}
 	*buffer_end = '\0';
 }
 
 @** Tangling.
-@<typedefs@>=
-typedef struct chunk{
-	struct chunk *li;
-} chunk;
 
 @
 @<do tangling@>=
 
 @** Weaving.
 @<do weaving@>=
-printf("%s", buffer);
+
+@** I/O control.
+There are two kinds of I/O, line-oriented and byte-oriented.
+Line-oritented is used for inputting source files and informing user running state
+of \.{MWEB}.  Byte-oriented is used for saving code chunks.
+
+@* Line-oriented.
+
+@<prototypes@>=
+void inform(char *); /* inform user */
+ifile *ifile_open(char *); /* open an file for inputting */
+void ifile_close(ifile *);
+char *readline(ifile *); /* read a line */
+
+@ The longest string of characters seperated by newline is limited to size of 1024.
+@<macros@>=
+#define MAXLINE (2<<10)
+
+@ Use a common buffer.
+@<global variables@>=
+char line_buffer[MAXLINE];
+
+@ A wrapper of |fputs|, inform user what happened, always use |stderr| as target.
+@c
+void
+inform(char *msg)
+{
+	fputs(msg, stderr);
+	fflush(stderr);
+}
+
+@ Reading of source files is controlled by |struct ifile|,
+which consists of a pathname and a pointer to stream connecting to the file.
+Assume that the pathname is shorter than the longest specified by \.{POSIX}.
+@f ifile int
+@<typedefs@>=
+typedef struct ifile {
+	char path[_POSIX_PATH_MAX];
+	FILE *fp;
+} ifile;
+
+@ Together with a initialization funciton. The function searches
+the file through a list of paths that is specified by environment variable {\tt MWEBINPUTS}.
+{\tt MWEBINPUTS} is similar to {\tt PATH}, pathnames are seperated by {\tt :}.
+@c
+ifile *
+ifile_open(char *f)
+{
+	ifile *ifp;
+	FILE *fp;
+	char *pl, *p; /* path list and path */
+
+	ifp = (ifile *) malloc(sizeof(ifile));
+	pl = getenv("MWEBINPUTS");
+
+	strcpy(ifp->path, f); /* search current directory first */
+	do {
+		fp = fopen(ifp->path, "r");
+		if (fp || !pl) break;
+
+		p = pl;  /* the head of current path list */
+		pl = strchr(pl, ':');
+		if (pl) *(pl++) = '\0'; /* remove the head */
+
+		strcpy(ifp->path, p);
+		strcat(ifp->path, "/");
+		strcat(ifp->path, f);
+	} while(1);
+
+	if (fp == NULL) {
+		err_quit("failed to find %s", f);
+	}
+	ifp->fp = fp;
+	return ifp;
+}
+
+@ Like file descriptor and stream, you should close a |ifile| if you do not need
+it anymore.
+@c
+void
+ifile_close(ifile *ifp)
+{
+	if (fclose(ifp->fp) == EOF) {
+		err_sys("failed to close %s", ifp->path);
+	}
+	free(ifp);
+}
+
+@ Read a source file line by line.
+@c
+char *
+readline(ifile *ifp)
+{
+	char *l;
+	l = fgets(line_buffer, MAXLINE, ifp->fp);
+	if (l && strlen(l) == MAXLINE - 1) {
+		err_quit("met a line too long when read %s", ifp->path);
+	}
+	return l;
+}
 
 @** Miscellaneous.
 This chapter is about the part of this program not worthy of mentioning
@@ -160,6 +245,7 @@ used to get access to \CEE/ standard library and system calls.
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <limits.h>
 #include <errno.h>
 #include <fcntl.h>
 
@@ -167,12 +253,6 @@ used to get access to \CEE/ standard library and system calls.
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-
-@* I/O control.
-
-@ The longest string of characters seperated by newline is limited to size of 1024.
-@<macros@>=
-#define MAXLINE (2<<10)
 
 @* Error handling.
 Defined functions used to locate different conditions
@@ -184,9 +264,9 @@ Mainly two conditions under consideration:
 2. Unrelated to a system call.
 
 @<prototypes@>=
-void err_sys(const char *fmt, ...); /* condition 1, print a message and terminate */
-void err_dump(const char *fmt, ...); /* condition 1, print a message, dump core, and terminate */
-void err_quit(const char *fmt, ...); /* condition 2, print a message and terminate */
+void err_sys(const char *, ...); /* condition 1, print a message and terminate */
+void err_dump(const char *, ...); /* condition 1, print a message, dump core, and terminate */
+void err_quit(const char *, ...); /* condition 2, print a message and terminate */
 
 @ Use a helper function |err_doit| to print message.
 Caller specifies |errnoflag| to decide whether to append |errno| imformation.
@@ -194,18 +274,14 @@ Caller specifies |errnoflag| to decide whether to append |errno| imformation.
 void 
 err_doit(int errnoflag, const char* fmt, va_list ap)
 {
-	char buf[MAXLINE];
-
-	vsnprintf(buf, MAXLINE-1, fmt, ap);
+	vsnprintf(line_buffer, MAXLINE-1, fmt, ap);
 	if (errnoflag)
-		snprintf(buf + strlen(buf), MAXLINE - strlen(buf) - 1, 
-		  ": %s", strerror(errno));
-	strcat(buf, "\n");
-	fflush(stdout);
-	fputs(buf, stderr);
-	fflush(NULL);
+		snprintf(line_buffer + strlen(line_buffer),
+			MAXLINE - strlen(line_buffer) - 1, 
+			": %s", strerror(errno));
+	strcat(line_buffer, "\n");
+	inform(line_buffer);
 }
-
 
 @ Fatal error related to a system call, 
 print a message and terminate.
