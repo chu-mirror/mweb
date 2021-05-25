@@ -7,7 +7,7 @@ aimed at providing a literate programming tool useful in creating programs
 with multiple languages.  It's similar to its two predecessors in weaving,
 \.{CWEB}'s formating and \.{NOWEB}'s cross-referencing particularly, 
 other parts are written from scratch.  The \.{M} in name is from {\it multiple},
-my family name(accidentally), and {\it make}.
+my family name(accidentally), and \.{MAKE}.
 
 I believe that a well documented program dose not only depend on well printing
 and ordering, but also expressive code.  Starting from this belief,
@@ -17,35 +17,34 @@ some of them are even created by myself.
 it's pure and beautiful, but can not do these dirty works for me.
 Then I turn to \.{NOWEB}, another powerful tool,
 having a happy time with it, but usually these hacking stuffs rely heavily
-on \.{make} or other related tools.
-\.{NOWEB}'s model of multiple to multiple is also a problem when dealing with
-large programs.
+on \.{MAKE} or other related tools.  \.{NOWEB}'s model of multiple source files to
+multiple object files is also a problem when dealing with large programs.
 
 The essence of these problems or limitations is that these tools are supposed
 to cooperate with current building process of a program. For example,
 they regard producing \CEE/ source files as the final object,
-and let \.{make} or others do the remaining part of building.
-The result is that what they documented is source files in fact,
-rather than programs themselves.
+and let \.{MAKE} or others do the remaining part of building.
+The result is that what they document is source files in fact,
+rather than programs that they ought to document.
 When I try to read a literate program, the first file I read is
 usually not the well printed PDF document, but the \.{Makefile}.
 
 Let's consider the constructing of a program in a broad view.
 If we want the program running on \.{linux} of \.{X64} platform,
 what we need exactly is \.{X64} assembly code with specification of linux's system calls,
-but we do not write assembly code ourselve.  Relying on marvelous
+but we do not write assembly code ourselves.  Relying on marvelous
 compilers and interpreters, we write \CEE/, \.{Python}, \.{Shell} to achieve
 what we want to do.  These compilers and interpreters perform translation
 between the code we write and the code machine want, or more generally,
 any code we are happy to write and any code be able to perform actions.
 Now the important, the two kinds of code are equivalent.
 
-The major purpose of \.{MWEB} is integrating the translation to
+The major purpose of \.{MWEB} is to integrate the translation to
 literate programming.  Thus, I can use any code I like to describe
-the computing, the program, the process.
-It means a part of functionalities of \.{make} will be transfered to \.{MWEB},
+the computing, the program, or the process.
+It means a part of functionalities of \.{MAKE} will be transfered to \.{MWEB},
 as you will see later, I rewrite this part in a more efficient way,
-which used by \.{GIT}.
+which is adopted by \.{GIT}.
 
 @c
 @<includes@>@;
@@ -72,7 +71,7 @@ main(int argc, char **argv)
 	}
 }
 
-@* Usage. \.{MWEB} is invoked from command line, accept a file name as the argument.
+@* Usage. \.{MWEB} is invoked from command line, accept a file name as the only argument.
 Unlike \.{CWEB} and \.{NOWEB}, I do not divide it into two parts.
 Each invoking will do both tangling and weaving.
 This behaviour can be changed by renaming the final executable file,
@@ -138,7 +137,7 @@ void
 read_input(ifile *ifp)
 {
 	while (readline(ifp)) {
-		int skip = 0;
+		int skip = 0; /* whether to skip this line */
 		@<handle control sequence when in inputting@>@;
 		if (skip) continue;
 		strcpy(buffer_end, line_buffer);
