@@ -1,5 +1,8 @@
+% control sequence list
+\def\ctrli{\hbox{\tt @@i}}
+
 @** Introduction.
-This is \.{MWEB} program by Ma Zhizhong, based on \.{CWEB} and \.{NOWEB},
+This is \.{MWEB} program by Zhizhong Ma, based on \.{CWEB} and \.{NOWEB},
 aimed at providing a literate programming tool useful in creating programs
 with multiple languages.  It's similar to its two predecessors in weaving,
 \.{CWEB}'s formating and \.{NOWEB}'s cross-referencing particularly, 
@@ -45,11 +48,11 @@ as you will see later, I rewrite this part in a more efficient way,
 which used by \.{GIT}.
 
 @c
-@<includes@>@/
-@<macros@>@/
-@<typedefs@>@/
-@<global variables@>@/
-@<prototypes@>
+@<includes@>@;
+@<macros@>@;
+@<typedefs@>@;
+@<global variables@>@;
+@<prototypes@>@;
 @#
 int
 main(int argc, char **argv)
@@ -100,7 +103,7 @@ you can create links to achieve same effect.
 	}
 }
 
-@* Read file. To improve efficiency and make use of modern PC's big memory,
+@* Read input. To improve efficiency and make use of modern PC's big memory,
 I use a relatively large buffer(16MB) to save the whole file.
 @<macros@>=
 #define BUFFER_LENGTH (1<<24)
@@ -114,15 +117,67 @@ char *buffer_end;
 @<initialize global variables@>=
 buffer_end = &buffer[0];
 
-@
+@ This process can be influenced by control sequence \ctrli,
+when \ctrli\ is found, we must temporily stop reading the current file
+and start reading from a file that named by following contents of the same line.
+\ctrli\ should be placed at beginning of a line, followed by a filename(with double
+quotes if contains blanks), the remainder is ignored.
+
+A recursive invoking may be a good choice.
 @<read input@>=
+read_input(src);
+ifile_close(src);
+
+@
+@<prototypes@>=
+void read_input(ifile *);
+
+@
+@c
+void
+read_input(ifile *ifp)
 {
-	ssize_t rd, fr;
-	fr = BUFFER_LENGTH; /* remaining free space */
-	while (readline(src)) {
-		inform(line_buffer);
+	while (readline(ifp)) {
+		int skip = 0;
+		@<handle control sequence when in inputting@>@;
+		if (skip) continue;
+		strcpy(buffer_end, line_buffer);
+		buffer_end += strlen(line_buffer);
 	}
-	*buffer_end = '\0';
+}
+
+@
+@<handle control sequence when in inputting@>=
+if (line_buffer[0] == '@@') {
+	switch(line_buffer[1]) { /* use a switch for further extending */
+	case 'i':
+		@<parse filename and include it@>@;
+		skip = 1; /* discard \ctrli\ line */
+		break;
+	default:
+		break;
+	}
+}
+
+@
+@<parse filename and include it@>=
+{
+	char *f;
+	ifile *nifp; /* new ifp */
+
+	f = &line_buffer[2];
+	f = skip_blank(f);
+	{	/* find ending of a file name */
+		char *e = f;
+		do {
+			e++;
+		} while (*e != '"' && *e != '\n');
+		*e = '\0';
+	}
+
+	nifp = ifile_open(f);
+	read_input(nifp);
+	ifile_close(nifp);
 }
 
 @** Tangling.
@@ -132,6 +187,7 @@ buffer_end = &buffer[0];
 
 @** Weaving.
 @<do weaving@>=
+printf("%s", buffer);
 
 @** I/O control.
 There are two kinds of I/O, line-oriented and byte-oriented.
@@ -183,9 +239,16 @@ ifile_open(char *f)
 	ifile *ifp;
 	FILE *fp;
 	char *pl, *p; /* path list and path */
+	static char plr[MAXLINE * 4]; /* path list reserved */
 
 	ifp = (ifile *) malloc(sizeof(ifile));
 	pl = getenv("MWEBINPUTS");
+
+	if (strlen(pl) >= MAXLINE) { /* assume length(MWEBINPUTS) < 4096 */
+		err_quit("the environment variable MWEBINPUTS is too long");
+	}
+	strcpy(plr, pl);
+	pl = plr;
 
 	strcpy(ifp->path, f); /* search current directory first */
 	do {
@@ -254,10 +317,25 @@ used to get access to \CEE/ standard library and system calls.
 #include <string.h>
 #include <stdarg.h>
 
-@* Error handling.
-Defined functions used to locate different conditions
-when an error occur.  
-Mainly two conditions under consideration:
+@* String operation.  \CEE/ standard library does not provide
+some useful operations.
+
+@<prototypes@>=
+char *skip_blank(char *); /* skip continues blanks */
+
+@ The blanks can be tabs and spaces.
+@c
+char *
+skip_blank(char *cur)
+{
+	while (*cur == ' ' || *cur == '\t') {
+		cur++;
+	}
+	return cur;
+}
+
+@* Error handling.  Functions used to locate different conditions
+when an error occur.  Mainly two conditions under consideration:
 
 1. Related to a system call.
 
