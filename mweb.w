@@ -3,7 +3,7 @@
 
 @** Introduction.
 This is \.{MWEB} program by Zhizhong Ma, based on \.{CWEB} and \.{NOWEB},
-aimed at providing a literate programming tool useful in creating programs
+aiming at providing a literate programming tool useful in creating programs
 with multiple languages.  It's similar to its two predecessors in weaving,
 \.{CWEB}'s formating and \.{NOWEB}'s cross-referencing particularly, 
 other parts are written from scratch.  The \.{M} in name is from {\it multiple},
@@ -25,7 +25,7 @@ to cooperate with current building process of a program. For example,
 they regard producing \CEE/ source files as the final object,
 and let \.{MAKE} or others do the remaining part of building.
 The result is that what they document is source files in fact,
-rather than programs that they ought to document.
+rather than programs that they ought to describe.
 When I try to read a literate program, the first file I read is
 usually not the well printed PDF document, but the \.{Makefile}.
 
@@ -37,7 +37,7 @@ compilers and interpreters, we write \CEE/, \.{Python}, \.{Shell} to achieve
 what we want to do.  These compilers and interpreters perform translation
 between the code we write and the code machine want, or more generally,
 any code we are happy to write and any code be able to perform actions.
-Now the important, the two kinds of code are equivalent.
+Now the important, the two kinds of code are equivalent in means of taking actions.
 
 The major purpose of \.{MWEB} is to integrate the translation to
 literate programming.  Thus, I can use any code I like to describe
@@ -103,7 +103,7 @@ you can create links to achieve same effect.
 }
 
 @* Read input. To improve efficiency and make use of modern PC's big memory,
-I use a relatively large buffer(16MB) to save the whole file.
+I use a relatively large buffer(16MB) to save the whole input.
 @<macros@>=
 #define BUFFER_LENGTH (1<<24)
 
@@ -180,9 +180,69 @@ if (line_buffer[0] == '@@') {
 }
 
 @** Tangling.
+Like other literate programming tools, code is represented as code chunks.
+Each code chunk describe a part of the whole program, they can be combined in
+mainly two ways, including and concatenating.  Concatenating is simply combining them
+one by one, \.{MWEB} does on special things in combining.  The combined
+chunks act as a new unit, called {\t section}, and each section has a name.
+By now, \.{MWEB} is not different with other tools, but it will diverge from tradition
+soon when including is under consideration. 
 
-@
+Including works the same as \ctrli, I have said that it's a way to combining chunks, but
+what can be included is sections in fact.  \.{MWEB} introduced translating to
+including, an including does not copy text verbatim from the section included,
+the text is transfered to a filter. The name {\it filter} comes from \.{UNIX} system,
+and it means basically the same thing in \.{MWEB}.  So, an including recepts the
+output from filters, and insert it into the section that performs the including.
+A filter can be \CEE/ compiler, \.{m4} interpreter, a perl script...etc, it can
+be defined in \.{MWEB}'s source file as a piece of shell script, like any other code chunk.
+
+The outline of tangling is all introduced, details will be talked in following
+implementation.  Make sure the data structures first.
+
+@ A code chunk can be represented by two points to |buffer|, |start| and |end|,
+for convenience, a pointer to next chunk is also saved.
+@<typedefs@>=
+typedef struct chunk {
+	char *start;
+	char *end;
+	struct chunk *next;
+} chunk;
+
+@ A section contains a section name, a list of code chunks, and the filter it use.
+The size of space used by names' saving can be safely set to |MAXLINE|, for
+all names are specified within one line.
+@<typedefs@>=
+typedef struct section {
+	char name[MAXLINE]; 
+	char filter[MAXLINE];
+	struct chunk *code;
+} section;
+
+@ A filter is like a section, except it does not go through a filter.
+Although it can be regarded as same as a section, I do not add filter to filter
+and always use one code chunk.  If you need to use a really big filter, maybe it means
+you should open a new \.{MWEB} source file.
+@<typedefs@>=
+typedef struct filter {
+	char name[MAXLINE];
+	struct chunk *code;
+} filter;
+
+@* Parse input.  The main purpose of this phrase is extracting useful information
+for tangling, and build index for sections and filters by hash tables.
 @<do tangling@>=
+@<parse input for tangling@>
+
+@ Before going forward, a little work should be done for further development.
+We have introduced control sequence \ctrli\ to \.{MWEB}, no surprise there are a lot
+others.  We only care about \ctrli\ in reading input, so control sequence's function
+and control sequence can be easily paired.  Things change when the number
+of control sequence increased, each one has its own function, but these functions
+can relate to each other.  
+
+@<parse input for tangling@>=
+
 
 @** Weaving.
 @<do weaving@>=
@@ -240,13 +300,18 @@ ifile_open(char *f)
 	char *pl, *p; /* path list and path */
 	static char plr[MAXLINE * 4]; /* path list reserved */
 
-	ifp = (ifile *) malloc(sizeof(ifile));
+	NEW(ifp);
 	pl = getenv("MWEBINPUTS");
 
-	if (strlen(pl) >= MAXLINE) { /* assume length(MWEBINPUTS) < 4096 */
+	if (pl && strlen(pl) >= MAXLINE) { /* assume length(MWEBINPUTS) < 4096 */
 		err_quit("the environment variable MWEBINPUTS is too long");
 	}
-	strcpy(plr, pl);
+
+	if (pl) { /* avoid operating on |env| */
+		strcpy(plr, pl);
+	} else {
+		strcpy(plr, "."); /* a default value */
+	}
 	pl = plr;
 
 	strcpy(ifp->path, f); /* search current directory first */
@@ -255,16 +320,20 @@ ifile_open(char *f)
 		if (fp || !pl) break;
 
 		p = pl;  /* the head of current path list */
-		pl = strchr(pl, ':');
-		if (pl) *(pl++) = '\0'; /* remove the head */
 
-		strcpy(ifp->path, p);
+		pl = strchr(pl, ':'); /* remove the head */
+		if (pl) *(pl++) = '\0';
+
+		strcpy(ifp->path, p); /* build new path */
 		strcat(ifp->path, "/");
 		strcat(ifp->path, f);
 	} while(1);
 
 	if (fp == NULL) {
-		err_quit("failed to find %s", f);
+		char ff[MAXLINE];
+		strcpy(ff, f);
+		err_quit("failed to find %s", ff);
+		/* err_quit("... %s", f) do wrong, and I don't known why */
 	}
 	ifp->fp = fp;
 	return ifp;
@@ -333,6 +402,88 @@ skip_blank(char *cur)
 	return cur;
 }
 
+@* Hash table.  \.{MWEB} use a simple hash code that is also used by \.{CWEB}.
+$$
+(2^{n-1}c_1+2^{n-2}c_2+\cdots+c_n)\bmod |hash_size|
+$$
+@<prototypes@>=
+int hash_code(char *);
+void hash_insert(hash_table *, char *, void *);
+void *hash_get(hash_table *, char *);
+
+@
+@c
+int
+hash_code(char *v)
+{
+	char *cp;
+	int h;
+
+	for (h = 0, cp = v; *cp; cp++) {
+		h = (h + h + *cp) % hash_size;
+	}
+
+	return h;
+}
+
+@ |hash_size| is set to |8501|.
+@<macros@>=
+#define hash_size 8501
+
+@ Because there are different kinds of names,
+I do not allocate memory for these tables here.
+@<typedefs@>=
+
+typedef struct hash_entry {
+	struct hash_entry *next;
+	char lable[MAXLINE];
+	void *p;
+} hash_entry;
+
+typedef struct hash_table {
+	hash_entry *entries[hash_size];
+} hash_table;
+
+@ Insert a element to |hash_table|.
+@c
+void
+hash_insert(hash_table *tbl, char *v, void *e)
+{
+	int h;
+	hash_entry *et;
+
+	h = hash_code(v);
+	NEW(et);
+
+	strcpy(et->lable, v); /* initialize new |hash_entry| */
+	et->p = e;
+	et->next = tbl->entries[h];
+
+	tbl->entries[h] = et; /* insert it to head of list */
+}
+
+@
+@c
+void *
+hash_get(hash_table *tbl, char *v)
+{
+	int h;
+	hash_entry *li;
+
+	h = hash_code(v);
+	li = tbl->entries[h];
+
+	while(li) {
+		if (!strcmp(li->lable, v)) {
+			return li->p;
+		}
+		li = li->next;
+	}
+
+	return NULL;
+}
+
+
 @* Error handling.  Functions used to locate different conditions
 when an error occur.  Mainly two conditions under consideration:
 
@@ -399,3 +550,90 @@ err_quit(const char *fmt, ...)
 }
 
 #undef ERR_PRINT
+
+@* Memory management.
+All nontrivial \.{C} programs allocate memory at runtime.
+And I'm going to write nontrivial \.{C} programs,
+so careful reflection should be paid on memory management.
+
+This chapter repackages the standard \.{C} library's three
+memory-management routines: |malloc|, |calloc|, and |free|,
+aiming to provide a interface that are less prone to error
+and provide a few additional capabilities.
+
+@ @<prototypes@>=
+void *mem_alloc(long, int);
+void *mem_calloc(long, long, int);
+void mem_free(void *, int);
+
+@ The two basic functions to allocate memory, 
+use additional argument |line| to report bugs.
+The standard library use type |size_t| for arguments,
+but arguments are declared |long| here to avoid errors
+when negative numbers are passed to unsigned arguments.
+@f line x
+@c
+void *
+mem_alloc(long nbytes, int line)
+{
+	void *p;
+
+	if (nbytes <= 0) {
+		err_quit("allocating %d bytes memory in line %d", nbytes, line);
+	}
+	p = malloc(nbytes);
+	if (p == NULL) {
+		err_sys("failed to allocate memory in line %d", line);
+	}
+	return p;
+}
+
+void *
+mem_calloc(long count, long nbytes, int line)
+{
+	void *p;
+
+	if (nbytes <= 0 || count <= 0) {
+		err_quit("allocating %d times %d bytes memory in line %d", 
+			count, nbytes, line);
+	}
+	p = calloc(count, nbytes);
+	if (p == NULL) {
+		err_sys("failed to allocate memory in line %d", line);
+	}
+	return p;
+}
+
+
+@ Use macro |__LINE__| to get current line's number.
+@<macros@>=
+#define ALLOC(nbytes) mem_alloc((nbytes), __LINE__)
+#define CALLOC(count, nbytes) mem_calloc((count), (nbytes), __LINE__)
+
+@ It's common to use idiom |p = malloc(sizeof *p)|,
+encapsulate the allocation and assignment with macros. 
+|NEW0| allocate a initialized block of zeros. 
+@<macros@>=
+#define NEW(p) ((p) = ALLOC((long)sizeof *(p)))
+#define NEW0(p) ((p) = CALLOC(1, (long)sizeof *(p)))
+
+@ Memory is deallocated by |mem_free|, 
+like the previous two functions,
+use |line| to report bugs.
+Deallocating of a null pointer is regarded as a bug.
+|FREE| does two things, invokes |mem_free| and sets |ptr| to the null pointer.
+Note that |FREE| evaluates ptr more than once.
+@<macros@>=
+#define FREE(ptr) ((void)(mem_free((ptr), __LINE__), (ptr) = 0))
+
+@
+@c
+void
+mem_free(void *ptr, int line)
+{
+	if (ptr == NULL) {
+		err_quit("deallocating a NULL pointer in line %d", line);
+	}
+	free(ptr);
+}
+
