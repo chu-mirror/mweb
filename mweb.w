@@ -1,5 +1,6 @@
-% control sequence list
-\def\ctrli{\hbox{\tt @@i}}
+% control sequence
+\def\ctrllist#1#2{\hbox{\hskip 0.5in\ctrl#1: #2}}
+\def\ctrl#1{\hbox{\tt @@#1}}
 
 @** Introduction.
 This is \.{MWEB} program by Zhizhong Ma, based on \.{CWEB} and \.{NOWEB},
@@ -50,8 +51,8 @@ which is adopted by \.{GIT}.
 @<includes@>@;
 @<macros@>@;
 @<typedefs@>@;
-@<global variables@>@;
 @<prototypes@>@;
+@<global variables@>@;
 @#
 int
 main(int argc, char **argv)
@@ -116,10 +117,10 @@ char *buffer_end;
 @<initialize global variables@>=
 buffer_end = &buffer[0];
 
-@ This process can be influenced by control sequence \ctrli,
-when \ctrli\ is found, we must temporily stop reading the current file
+@ This process can be influenced by control sequence \ctrl{i},
+when \ctrl{i}\ is found, we must temporily stop reading the current file
 and start reading from a file that named by following contents of the same line.
-\ctrli\ should be placed at beginning of a line, followed by a filename(with double
+\ctrl{i}\ should be placed at beginning of a line, followed by a filename(with double
 quotes if contains blanks), the remainder is ignored.
 
 A recursive invoking may be a good choice.
@@ -151,7 +152,7 @@ if (line_buffer[0] == '@@') {
 	switch(line_buffer[1]) { /* use a switch for further extending */
 	case 'i':
 		@<parse filename and include it@>@;
-		skip = 1; /* discard \ctrli\ line */
+		skip = 1; /* discard \ctrl{i}\ line */
 		break;
 	default:
 		break;
@@ -188,7 +189,7 @@ chunks act as a new unit, called {\t section}, and each section has a name.
 By now, \.{MWEB} is not different with other tools, but it will diverge from tradition
 soon when including is under consideration. 
 
-Including works the same as \ctrli, I have said that it's a way to combining chunks, but
+Including works the same as \ctrl{i}, I have said that it's a way to combining chunks, but
 what can be included is sections in fact.  \.{MWEB} introduced translating to
 including, an including does not copy text verbatim from the section included,
 the text is transfered to a filter. The name {\it filter} comes from \.{UNIX} system,
@@ -200,7 +201,7 @@ be defined in \.{MWEB}'s source file as a piece of shell script, like any other 
 The outline of tangling is all introduced, details will be talked in following
 implementation.  Make sure the data structures first.
 
-@ A code chunk can be represented by two points to |buffer|, |start| and |end|,
+@ A code chunk can be represented by two pointers to |buffer|, |start| and |end|,
 for convenience, a pointer to next chunk is also saved.
 @<typedefs@>=
 typedef struct chunk {
@@ -219,34 +220,134 @@ typedef struct section {
 	struct chunk *code;
 } section;
 
-@ A filter is like a section, except it does not go through a filter.
-Although it can be regarded as same as a section, I do not add filter to filter
-and always use one code chunk.  If you need to use a really big filter, maybe it means
-you should open a new \.{MWEB} source file.
-@<typedefs@>=
-typedef struct filter {
-	char name[MAXLINE];
-	struct chunk *code;
-} filter;
+@ A filter is itself a program, so it can also be expressed as text plus filter
+as same as sections.  The difference between a section and a filter is the way in
+treating the text, a section's text is used as input to a filter for getting output,
+a filter's text is used to drive the interpreter, the drived interpreter's actions
+form a program named filter.  To \.{MWEB}, a filter is just a section plus a
+interpreter, \.{MWEB} use Bourne Shell as the interpreter.
 
-@* Parse input.  The main purpose of this phrase is extracting useful information
+@* Parse input.  The main purpose of this phrase is extracting useful informations
 for tangling, and build index for sections and filters by hash tables.
 @<do tangling@>=
 @<parse input for tangling@>
 
 @ Before going forward, a little work should be done for further development.
-We have introduced control sequence \ctrli\ to \.{MWEB}, no surprise there are a lot
-others.  We only care about \ctrli\ in reading input, so control sequence's function
-and control sequence can be easily paired.  Things change when the number
-of control sequence increased, each one has its own function, but these functions
-can relate to each other.  
+We have introduced control sequence \ctrl{i}\ to \.{MWEB}, no surprise there are a lot
+others.  We only care about \ctrl{i}\ in reading input, so sequence's function
+and sequence can be easily paired.  Things change when the number
+of sequences increased, each one has its own function, but these functions
+can relate to each other.  The complexity will soon be out of control, if we do not
+give a plan in mapping sequences to their functions.
 
+In parsing for tangling, we want control sequences to be able to label the start and the end of some
+contents.  The contents is a block of text, can be code or name. So we define:
+\vskip 3pt
+\ctrllist{<}{start of a section name}
+\ctrllist{>}{end of a section name, start of a code chunk}
+\ctrllist{:}{followed by the filter name used in this section}
+\ctrllist{\it newline}{end of a code chunk}
+\vskip 3pt
+You might have noticed that there are some rules of places they appear.  For example, you can not
+place start of another section name in a section name.  From this observation,
+\.{MWEB} use a global variable |context| to indicate current type of text.
+@<global variables@>=
+context_1 context; /* current context, |context_0| is used in reading input */
+char *loc; /* current location */
+
+@ There are three types of text for now, code, name, others.
+@<typedefs@>=
+typedef enum context_1{ NAME, CODE, OTHERS }; 
+
+@ |context| should be initialized to |OTHERS| at the beginning of parsing,
+together with a lot of other initializations.
+
+@<prepare global variables before parsing for tangling@>=
+loc = 0;
+context = OTHERS;
+
+@ The parsing is designed to handle one character at once, so an immediate pasing
+should be done if current character is needed.
+@<global variables@>=
+char *dest;
+
+@
+@<prepare global variables before parsing for tangling@>=
+dest = NULL;
+
+@ So the entire parse process can be written.
 @<parse input for tangling@>=
+@<prepare global variables before parsing for tangling@>@;
+while (loc != buffer_end) {
+	if (*loc == '@@') {
+		@<handle control sequence in parsing for tangling@>@;
+	} else {
+		if (dest) *(dest++) = *(loc++);
+	}
+}
+
+@
+@<handle control sequence in parsing for tangling@>=
+
+
+@ The next is studying the functions, find out how they can be implemented.
+From the list above, we can get:
+@<prototypes@>=
+void start_section_name(void);
+void end_section_name(void);
+void start_code_chunk(void);
+void end_code_chunk(void);
+void attach_filter(void);
+
+@
+@c
+void
+start_section_name()
+{
+	
+}
+
+@ Combine them to build functions defined by contexts and control sequences.
+@<prototypes@>=
+void others_left_angle_bracket(void);
+void name_others_right_angle_bracket(void);
+void code_colon(void);
+void code_newline(void);
+
+@ Functions of left angle bracket.
+@c
+void
+others_left_angle_bracket()
+{
+	start_section_name();
+}
+
+@ Right angle bracket. Use a {\tt =} to indicate start of code chunk.
+@c
+void
+name_right_angle_bracket()
+{
+	end_section_name();
+	if (*loc != '=') {
+		err_quit("syntax error: missing a '='");
+	}
+	loc++;
+	start_code_chunk();
+}
+
+@ Colon.
+@c
+void
+code_newline()
+{
+	attach_filter();
+}
+
 
 
 @** Weaving.
 @<do weaving@>=
-printf("%s", buffer);
+
 
 @** I/O control.
 There are two kinds of I/O, line-oriented and byte-oriented.
@@ -291,6 +392,20 @@ typedef struct ifile {
 @ Together with a initialization funciton. The function searches
 the file through a list of paths that is specified by environment variable {\tt MWEBINPUTS}.
 {\tt MWEBINPUTS} is similar to {\tt PATH}, pathnames are seperated by {\tt :}.
+@<global variables@>=
+char *inputs_path; /* position of environment variable MWEBINPUTS */
+
+@
+@<initialize global variables@>=
+inputs_path = getenv("MWEBINPUTS");
+if (!inputs_path) {
+	inputs_path = "."; /* give it a default value */
+}
+if (strlen(inputs_path) >= MAXLINE * 4) { /* assume length(MWEBINPUTS) < 4096 */
+	err_quit("the environment variable MWEBINPUTS is too long");
+}
+
+@
 @c
 ifile *
 ifile_open(char *f)
@@ -298,46 +413,41 @@ ifile_open(char *f)
 	ifile *ifp;
 	FILE *fp;
 	char *pl, *p; /* path list and path */
-	static char plr[MAXLINE * 4]; /* path list reserved */
+	static char plt[MAXLINE * 4]; /* tempory storing for path list */
 
 	NEW(ifp);
-	pl = getenv("MWEBINPUTS");
 
-	if (pl && strlen(pl) >= MAXLINE) { /* assume length(MWEBINPUTS) < 4096 */
-		err_quit("the environment variable MWEBINPUTS is too long");
-	}
+	strcpy(plt, inputs_path); /* avoid operating on |env| */
+	pl = plt;
 
-	if (pl) { /* avoid operating on |env| */
-		strcpy(plr, pl);
-	} else {
-		strcpy(plr, "."); /* a default value */
-	}
-	pl = plr;
-
-	strcpy(ifp->path, f); /* search current directory first */
-	do {
-		fp = fopen(ifp->path, "r");
-		if (fp || !pl) break;
-
-		p = pl;  /* the head of current path list */
-
-		pl = strchr(pl, ':'); /* remove the head */
-		if (pl) *(pl++) = '\0';
-
-		strcpy(ifp->path, p); /* build new path */
-		strcat(ifp->path, "/");
-		strcat(ifp->path, f);
-	} while(1);
+	@<search for |f| in |pl|@>@;
 
 	if (fp == NULL) {
 		char ff[MAXLINE];
 		strcpy(ff, f);
 		err_quit("failed to find %s", ff);
-		/* err_quit("... %s", f) do wrong, and I don't known why */
+		/* |err_quit("...", f)| do wrong, and I don't known why */
 	}
 	ifp->fp = fp;
 	return ifp;
 }
+
+@
+@<search for |f| in |pl|@>=
+strcpy(ifp->path, f); /* search current directory first */
+do {
+	fp = fopen(ifp->path, "r");
+	if (fp || !pl) break;
+
+	p = pl;  /* the head of current path list */
+
+	pl = strchr(pl, ':'); /* remove the head */
+	if (pl) *(pl++) = '\0';
+
+	strcpy(ifp->path, p); /* build new path */
+	strcat(ifp->path, "/");
+	strcat(ifp->path, f);
+} while(1);
 
 @ Like file descriptor and stream, you should close a |ifile| if you do not need
 it anymore.
