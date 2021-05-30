@@ -1,6 +1,6 @@
 % control sequence
-\def\ctrllist#1#2{\hbox{\hskip 0.5in\ctrl#1: #2}}
-\def\ctrl#1{\hbox{\tt @@#1}}
+\def\ctrllist#1#2{\hbox{\hskip 0.5in\ctrl#1 #2}}
+\def\ctrl#1{\hbox{\tt @@{#1}}}
 
 @** Introduction.
 This is \.{MWEB} program by Zhizhong Ma, based on \.{CWEB} and \.{NOWEB},
@@ -60,8 +60,8 @@ main(int argc, char **argv)
 	int t_flag = 1, w_flag = 1;
 	ifile *src; /* the source file */
 
-	@<parse command line@>@;
 	@<initialize global variables@>@;
+	@<parse command line@>@;
 	@<read input@>@;
 
 	if (t_flag) {
@@ -162,23 +162,40 @@ if (line_buffer[0] == '@@') {
 @
 @<parse filename and include it@>=
 {
-	char *f;
+	char f[MAXLINE], *cp;
 	ifile *nifp; /* new ifp */
 
-	f = &line_buffer[2];
-	f = skip_blank(f);
-	{	/* find ending of a file name */
-		char *e = f;
-		do {
-			e++;
-		} while (*e != '"' && *e != '\n');
+	cp = &line_buffer[2];
+	cp = skip_blank(cp);
+	{ /* lable the end with |'\0'| */
+		char *e = cp;
+		if (*cp == '"') {
+			cp++;
+			@<find the end with double quotes@>@;
+		} else {
+			do {
+				e++;
+			} while(isblank(*e));
+		}
 		*e = '\0';
 	}
+
+	strcpy(f, cp);
 
 	nifp = ifile_open(f);
 	read_input(nifp);
 	ifile_close(nifp);
 }
+
+@
+@<find the end with double quotes@>=
+do {
+	e++;
+} while (*e != '"' && *e != '\n');
+if (*e != '"') {
+	err_quit("syntax error: missing a '\"'");
+}
+*e = '\0';
 
 @** Tangling.
 Like other literate programming tools, code is represented as code chunks.
@@ -212,7 +229,7 @@ typedef struct chunk {
 
 @ A section contains a section name, a list of code chunks, and the filter it use.
 The size of space used by names' saving can be safely set to |MAXLINE|, for
-all names are specified within one line.
+all names are given within one line.
 @<typedefs@>=
 typedef struct section {
 	char name[MAXLINE]; 
@@ -220,12 +237,15 @@ typedef struct section {
 	struct chunk *code;
 } section;
 
-@ A filter is itself a program, so it can also be expressed as text plus filter
+@ A filter is itself a program, so it can also be expressed as text plus a filter
 as same as sections.  The difference between a section and a filter is the way in
-treating the text, a section's text is used as input to a filter for getting output,
+treating the text, a section's text is used as a component of the program,
 a filter's text is used to drive the interpreter, the drived interpreter's actions
 form a program named filter.  To \.{MWEB}, a filter is just a section plus a
 interpreter, \.{MWEB} use Bourne Shell as the interpreter.
+
+@<global variables@>=
+char interpreter[] = "/bin/sh";
 
 @* Parse input.  The main purpose of this phrase is extracting useful informations
 for tangling, and build index for sections and filters by hash tables.
@@ -244,32 +264,45 @@ In parsing for tangling, we want control sequences to be able to label the start
 contents.  The contents is a block of text, can be code or name. So we define:
 \vskip 3pt
 \ctrllist{<}{start of a section name}
-\ctrllist{>}{end of a section name, start of a code chunk}
-\ctrllist{:}{followed by the filter name used in this section}
+\ctrllist{>}{end of a section name or end of a filter name, start of a code chunk}
+\ctrllist{:}{end of a section name, followed by the filter name used in this section}
 \ctrllist{\it newline}{end of a code chunk}
 \vskip 3pt
 You might have noticed that there are some rules of places they appear.  For example, you can not
 place start of another section name in a section name.  From this observation,
-\.{MWEB} use a global variable |context| to indicate current type of text.
+\.{MWEB} use global variable to indicate current type of text.
 @<global variables@>=
-context_1 context; /* current context, |context_0| is used in reading input */
+contexts_1 context_1; /* current context, |context_0| may be used in reading input */
 char *loc; /* current location */
 
-@ There are three types of text for now, code, name, others.
+@ There are four types of text for now, code, section's name, filter's name, others.
+@f contexts_1 int
 @<typedefs@>=
-typedef enum context_1{ NAME, CODE, OTHERS }; 
+typedef enum contexts_1{ NAME_SECTION, NAME_FILTER, CODE, OTHERS } contexts_1; 
 
 @ |context| should be initialized to |OTHERS| at the beginning of parsing,
 together with a lot of other initializations.
 
 @<prepare global variables before parsing for tangling@>=
-loc = 0;
-context = OTHERS;
+loc = &buffer[0];
+context_1 = OTHERS;
 
-@ The parsing is designed to handle one character at once, so an immediate pasing
+@ The parsing is designed to handle one character at once, so an immediate passing
 should be done if current character is needed.
 @<global variables@>=
 char *dest;
+
+@
+@c
+void
+pass_to_dest(char c)
+{
+	if (dest) *(dest++) = c;
+}
+
+@
+@<prototypes@>=
+void pass_to_dest(char);
 
 @
 @<prepare global variables before parsing for tangling@>=
@@ -280,74 +313,223 @@ dest = NULL;
 @<prepare global variables before parsing for tangling@>@;
 while (loc != buffer_end) {
 	if (*loc == '@@') {
+		loc++; /* take |'@@'| */
 		@<handle control sequence in parsing for tangling@>@;
 	} else {
-		if (dest) *(dest++) = *(loc++);
+		pass_to_dest(*(loc++));
 	}
 }
 
-@
-@<handle control sequence in parsing for tangling@>=
-
-
 @ The next is studying the functions, find out how they can be implemented.
-From the list above, we can get:
+From the list above, we can get the basic operations:
 @<prototypes@>=
-void start_section_name(void);
-void end_section_name(void);
-void start_code_chunk(void);
-void end_code_chunk(void);
-void attach_filter(void);
+void start_section_name_1(void); /* number |1| is from |context_1| */
+void end_section_name_1(void);
+void start_filter_name_1(void);
+void end_filter_name_1(void);
+void start_code_chunk_1(void);
+void end_code_chunk_1(void);
+
+@ The basic operations take effect on following global variables.
+@<global variables@>=
+section *cur_section; /* current section */
+chunk *cur_chunk; /* current code chunk */
+hash_table sections;
 
 @
 @c
 void
-start_section_name()
+start_section_name_1()
 {
-	
+	section *scp;
+
+	NEW(scp);
+	cur_section = scp;
+	dest = scp->name;
+
+	loc = skip_blank(loc);
 }
 
+@
+@c
+void
+end_section_name_1()
+{
+
+	*dest = '\0';
+
+	strip_blank(cur_section->name);
+	hash_insert(&sections, cur_section->name, cur_section);
+
+	dest = NULL;
+}
+
+@
+@c
+void start_code_chunk_1()
+{
+	chunk *ckp;
+
+	NEW(ckp);
+	cur_chunk = ckp;
+	ckp->start = loc;
+}
+
+@
+@c
+void
+end_code_chunk_1()
+{
+	cur_chunk->end = loc-2;
+
+	@<add new code chunk to current section@>@;
+
+	cur_chunk = NULL;
+	cur_section = NULL;
+}
+
+@
+@<add new code chunk to current section@>=
+{
+	if (!cur_section->code) {
+		cur_section->code = cur_chunk;
+	} else {
+		chunk *ckp_t;
+		for (ckp_t = cur_section->code; ckp_t->next; ckp_t = ckp_t->next)
+			;
+		ckp_t->next = cur_chunk;
+	}
+}
+
+@
+@c
+void
+start_filter_name_1()
+{
+	dest = cur_section->filter;
+	loc = skip_blank(loc);
+}
+
+@
+@c
+void
+end_filter_name_1()
+{
+	*dest = '\0';
+	strip_blank(cur_section->filter);
+
+	dest = NULL;
+}
 @ Combine them to build functions defined by contexts and control sequences.
 @<prototypes@>=
-void others_left_angle_bracket(void);
-void name_others_right_angle_bracket(void);
-void code_colon(void);
-void code_newline(void);
+void others_left_angle_bracket_1(void);
+void name1_right_angle_bracket_1(void); /* |name1|'s |1| means section name */
+void name2_right_angle_bracket_1(void); /* |2| means filter name */
+void name1_colon_1(void);
+void code_newline_1(void);
 
 @ Functions of left angle bracket.
 @c
 void
-others_left_angle_bracket()
+others_left_angle_bracket_1()
 {
-	start_section_name();
+	context_1 = NAME_SECTION;
+	start_section_name_1();
 }
 
 @ Right angle bracket. Use a {\tt =} to indicate start of code chunk.
 @c
-void
-name_right_angle_bracket()
-{
-	end_section_name();
-	if (*loc != '=') {
-		err_quit("syntax error: missing a '='");
-	}
-	loc++;
-	start_code_chunk();
+#define START_CODE_CHUNK { \
+	context_1 = CODE; \
+	if (*loc != '=') err_quit("syntax error: missing a '='"); \
+	loc++; \
+	start_code_chunk_1(); \
 }
+
+void
+name1_right_angle_bracket_1()
+{
+	end_section_name_1();
+	START_CODE_CHUNK;
+}
+
+void
+name2_right_angle_bracket_1()
+{
+	end_filter_name_1();
+	START_CODE_CHUNK;
+}
+#undef START_CODE_CHUNK
 
 @ Colon.
 @c
 void
-code_newline()
+name1_colon_1()
 {
-	attach_filter();
+	context_1 = NAME_FILTER;
+	end_section_name_1();
+	start_filter_name_1();
 }
 
+@ Newline.
+@c
+void
+code_newline_1()
+{
+	context_1 = OTHERS;
+	end_code_chunk_1();
+}
 
+@ \.{MWEB} assigns these funtions to control sequences by checking tables,
+the number of contexts can be represented by |OTEHRS+1|, and \.{MWEB}
+only handle \.{ASCII} characters now.
+@<global variables@>=
+void (*func_map_1[OTHERS+1][UCHAR_MAX])(void) = {
+	[OTHERS]['<']		= others_left_angle_bracket_1,
+	[NAME_SECTION]['>']	= name1_right_angle_bracket_1,
+	[NAME_SECTION][':']	= name1_colon_1,
+	[NAME_FILTER]['>']	= name1_right_angle_bracket_1,
+	[CODE]['\n']		= code_newline_1
+};
+
+@ We can complete the parsing now.
+@<handle control sequence in parsing for tangling@>=
+{
+	void (*fnp)(void);
+
+	fnp = func_map_1[context_1][*loc]; 
+	loc++;
+	if (fnp) {
+		(*fnp)();
+	} else {
+		pass_to_dest('@@');
+		pass_to_dest(*(loc-1));
+	}
+}
+
+@ The parsing is completed, you can see that the names of sequences' functions
+follow an explicit rule.  In fact, we do not care about these names, as far as
+they are unique.  We place the functions to correct grids in |func_map_1|,
+then the names become useless, a waste of namespace, bring in unwanted complexity.
+This problem can not be solved in one single \CEE/ program, but we can use
+another program to automatically generate this part of \CEE/ code.
+The information distilled from this part of code is expressed in another
+language, translated by filter to produce corresponding \CEE/ code.
+\.{MWEB} has potential to do a lot of works, but this is the most important.
+
+@* Tangle up.
 
 @** Weaving.
 @<do weaving@>=
-
+{
+	char *bg, *end;
+	bg = ((section *)hash_get(&sections, "code chunk"))->code->start;
+	end = ((section *)hash_get(&sections, "code chunk"))->code->end;
+	while (bg != end) {
+		putchar(*bg);
+		bg++;
+	}
+}
 
 @** I/O control.
 There are two kinds of I/O, line-oriented and byte-oriented.
@@ -423,10 +605,7 @@ ifile_open(char *f)
 	@<search for |f| in |pl|@>@;
 
 	if (fp == NULL) {
-		char ff[MAXLINE];
-		strcpy(ff, f);
-		err_quit("failed to find %s", ff);
-		/* |err_quit("...", f)| do wrong, and I don't known why */
+		err_quit("failed to find %s", f);
 	}
 	ifp->fp = fp;
 	return ifp;
@@ -490,6 +669,7 @@ used to get access to \CEE/ standard library and system calls.
 #include <errno.h>
 #include <fcntl.h>
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -500,16 +680,27 @@ some useful operations.
 
 @<prototypes@>=
 char *skip_blank(char *); /* skip continues blanks */
+void strip_blank(char *);
 
 @ The blanks can be tabs and spaces.
 @c
 char *
 skip_blank(char *cur)
 {
-	while (*cur == ' ' || *cur == '\t') {
+	while (isblank(*cur)) {
 		cur++;
 	}
 	return cur;
+}
+
+void
+strip_blank(char *s)
+{
+	char *e;
+	e = s + strlen(s);
+	while (isblank(*(--e)))
+		;
+	*(e+1) = '\0';
 }
 
 @* Hash table.  \.{MWEB} use a simple hash code that is also used by \.{CWEB}.
