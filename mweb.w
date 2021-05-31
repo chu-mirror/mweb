@@ -220,6 +220,7 @@ implementation.  Make sure the data structures first.
 
 @ A code chunk can be represented by two pointers to |buffer|, |start| and |end|,
 for convenience, a pointer to next chunk is also saved.
+@f chunk int
 @<typedefs@>=
 typedef struct chunk {
 	char *start;
@@ -230,6 +231,7 @@ typedef struct chunk {
 @ A section contains a section name, a list of code chunks, and the filter it use.
 The size of space used by names' saving can be safely set to |MAXLINE|, for
 all names are given within one line.
+@f section int
 @<typedefs@>=
 typedef struct section {
 	char name[MAXLINE]; 
@@ -507,8 +509,8 @@ void (*func_map_1[OTHERS+1][UCHAR_MAX])(void) = {
 	}
 }
 
-@ The parsing is completed, you can see that the names of sequences' functions
-follow an explicit rule.  In fact, we do not care about these names, as far as
+@ The parsing is completed, you can see that the naming of these functions
+follows an explicit rule.  In fact, we do not care about these names, as far as
 they are unique.  We place the functions to correct grids in |func_map_1|,
 then the names become useless, a waste of namespace, bring in unwanted complexity.
 This problem can not be solved in one single \CEE/ program, but we can use
@@ -517,18 +519,92 @@ The information distilled from this part of code is expressed in another
 language, translated by filter to produce corresponding \CEE/ code.
 \.{MWEB} has potential to do a lot of works, but this is the most important.
 
-@* Tangle up.
+@* Tangle up.  This is the core part of \.{MWEB}.
+
+@<do tangling@>=
+@<prepare global variables for tangling up@>@;
+@<tangle up code chunks@>@;
+
+@ For convenience, \.{MWEB} assume the existing of a section named {\it root},
+as its name suggests, it's the root node in the tree of sections.
+@<tangle up code chunks@>=
+tangle_up("root");
+
+@
+@<prototypes@>=
+void tangle_up(char *);
+
+@ Control sequences.
+\vskip 3pt
+\ctrllist{<}{start of a section name being included}
+\ctrllist{>}{end of a section name being included}
+\ctrllist{(}{start of a section name being referenced}
+\ctrllist{)}{end of a section name being referenced}
+\vskip 3pt
+@f contexts_2 int
+@<typedefs@>=
+typedef enum contexts_2 {NAME_INC_CODE, NAME_REF_CODE, PLAIN_CODE} contexts_2;
+
+@ Like parsing, I use a new context for tangling up.
+@<global variables@>=
+contexts_2 context_2;
+char cur_section_name[MAXLINE];
+
+@
+@<prepare global variables for tangling up@>=
+context_2 = PLAIN_CODE;
+dest = NULL;
+
+@
+@<prototypes@>=
+void start_section_name_include_2(void);
+void end_section_name_include_2(void);
+void start_section_name_reference_2(void);
+void end_section_name_reference_2(void);
+
+@
+@c
+void
+start_section_name_include_2()
+{
+	dest = cur_section_name;
+}
+
+void
+end_section_name_include_2()
+{
+	*dest = '\0';
+	//|include_sec(cur_section_name);|
+	dest = NULL;
+}
+
+@
+@c
+void
+start_section_name_reference_2()
+{
+	dest = cur_section_name;
+}
+
+void
+end_section_name_reference_2()
+{
+	*dest = '\0';
+	//|ref_sec(cur_section_name);|
+	dest = NULL;
+}
 
 @** Weaving.
 @<do weaving@>=
 {
-	char *bg, *end;
-	bg = ((section *)hash_get(&sections, "code chunk"))->code->start;
-	end = ((section *)hash_get(&sections, "code chunk"))->code->end;
-	while (bg != end) {
-		putchar(*bg);
-		bg++;
-	}
+	int fd;
+	fd = file_open("test");
+	write(fd, buffer, buffer_end-buffer);
+	file_close(fd);
+
+	fd = file_open("test2");
+	transfer(fd, "test");
+	file_close(fd);
 }
 
 @** I/O control.
@@ -653,6 +729,132 @@ readline(ifile *ifp)
 	return l;
 }
 
+@* Byte-oriented.  \.{MWEB} use unbuffered I/O to do saving of mid products,
+outside world communicate with this module through a swap area. The swap area
+is same with buffer, but controled under \.{MWEB}, rather than standard library.
+
+@<prototypes@>=
+void transfer(int, char *);
+void clear_swap(int);
+int file_open(char *);
+void file_close(int);
+
+@
+@<global variables@>=
+char swap_area[SWAP_LENGTH];
+char *swap_end;
+
+@ The size is set to 32KB, according to {\sl Advanced Programming in the UNIX
+Environment}, it may be an ideal size to transfer data's blocks.
+@<macros@>=
+#define SWAP_LENGTH (2<<15)
+
+@ The mid products are placed in the folder {\tt .srcfile},
+{\tt srcfile} is the name of input file.
+@<global variables@>=
+int mid_dir;
+
+@
+@<initialize global variables@>=
+swap_end = &swap_area[0];
+{
+	char dir[MAXLINE], *dir_end;
+	char *cp, *slp; /* slash's position */
+	int n;
+
+	strcpy(dir, argv[1]);
+	dir_end = dir + strlen(dir);
+
+	slp = strrchr(dir, '/');
+	cp = slp ? slp + 1 : dir;
+	{ 
+		char c1 = '.', c2;
+		for (; cp != dir_end; cp++) {
+			c2 = c1;
+			c1 = *cp;
+			*cp = c2;
+		}
+		*cp = c1;
+		*(cp+1) = '\0';
+	}
+	strip_suffix(dir);
+
+	n = mkdirat(AT_FDCWD, dir, 0700);
+	if (n == -1 && errno != EEXIST) {
+		err_sys("failed to create directory %s", dir);
+	}
+	mid_dir = openat(AT_FDCWD, dir, O_DIRECTORY);
+	if (mid_dir == -1) {
+		err_sys("failed to open directory %s", dir);
+	}
+}
+
+@
+@c
+int
+file_open(char *f)
+{
+	int fd;
+	fd = openat(mid_dir, f, O_RDWR | O_CREAT, 0600);
+	if (fd == -1) {
+		err_sys("failed to open %s", f);
+	}
+
+	return fd;
+}
+
+@
+@c
+void
+file_close(int fd)
+{
+	if (close(fd) == -1) {
+		err_sys("failed to close file");
+	}
+}
+
+@ Write the swap area to |fd|.
+@c
+void
+clear_swap(int fd)
+{
+	ssize_t n;
+	n = write(fd, swap_area, swap_end - swap_area);
+	if (n == -1 || n != swap_end - swap_area) {
+		err_sys("failed to save mid product");
+	}
+	swap_end = &swap_area[0];
+}
+
+@ Copy the the contents of file |f| to the |fd|.
+@c
+void
+transfer(int fd, char *f)
+{
+	int fd_t; /* |fd| being transfered */
+	ssize_t n1, n2;
+	fd_t = file_open(f);
+
+	if (swap_end != &swap_area[0]) {
+		clear_swap(fd);
+	}
+
+	do {
+		n1 = read(fd_t, swap_area, SWAP_LENGTH);
+		if (n1 == -1) {
+			err_sys("failed to read mid product");
+		}
+		if (n1) {
+			n2 = write(fd, swap_area, n1);
+			if (n2 == -1 || n1 != n2) {
+				err_sys("failed to transfer mid product");
+			}
+		}
+	} while (n1);
+
+	file_close(fd_t);
+}
+
 @** Miscellaneous.
 This chapter is about the part of this program not worthy of mentioning
 but indipensable for actually running.
@@ -664,6 +866,7 @@ used to get access to \CEE/ standard library and system calls.
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #include <limits.h>
 #include <errno.h>
@@ -681,6 +884,7 @@ some useful operations.
 @<prototypes@>=
 char *skip_blank(char *); /* skip continues blanks */
 void strip_blank(char *);
+void strip_suffix(char *);
 
 @ The blanks can be tabs and spaces.
 @c
@@ -693,6 +897,8 @@ skip_blank(char *cur)
 	return cur;
 }
 
+@ Strip the unneeded ending.
+@c
 void
 strip_blank(char *s)
 {
@@ -701,6 +907,18 @@ strip_blank(char *s)
 	while (isblank(*(--e)))
 		;
 	*(e+1) = '\0';
+}
+
+void
+strip_suffix(char *s)
+{
+	char *dotp, *slp; /* dot's position, slash's position */
+	dotp = strrchr(s, '.');
+	slp = strrchr(s, '/');
+
+	if (dotp && slp < dotp) {
+		*dotp = '\0';
+	}
 }
 
 @* Hash table.  \.{MWEB} use a simple hash code that is also used by \.{CWEB}.
@@ -733,8 +951,9 @@ hash_code(char *v)
 
 @ Because there are different kinds of names,
 I do not allocate memory for these tables here.
+@f hash_entry int
+@f hash_table int
 @<typedefs@>=
-
 typedef struct hash_entry {
 	struct hash_entry *next;
 	char lable[MAXLINE];
@@ -784,6 +1003,9 @@ hash_get(hash_table *tbl, char *v)
 	return NULL;
 }
 
+@* SHA-1.  An implementation of \.{SHA-1}.
+@<prototypes@>=
+void sha_1_name(char *, char *);
 
 @* Error handling.  Functions used to locate different conditions
 when an error occur.  Mainly two conditions under consideration:
