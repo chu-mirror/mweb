@@ -5,3 +5,7 @@ EX = hello
 	../mweb $<
 
 all: ${EX}
+
+clean:
+	${RM} -r .hello
+	${RM} ${EX}

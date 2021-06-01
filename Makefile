@@ -21,3 +21,4 @@ clean:
 	${RM} ${DOC} ${ALL}
 	@${RM} ${LIT:.w=.toc} ${LIT:.w=.log} ${LIT:.w=.tex} \
 		${LIT:.w=.scn} ${LIT:.w=.idx} ${LIT:.w=.c}
+	@cd examples; make clean
