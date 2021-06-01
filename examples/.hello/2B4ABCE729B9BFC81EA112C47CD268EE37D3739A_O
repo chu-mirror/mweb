@@ -1,0 +1,4 @@
+
+cp @< @<.c
+cc -std=c90 -o hello @<.c
+mv hello ..

@@ -247,7 +247,7 @@ form a program named filter.  To \.{MWEB}, a filter is just a section plus a
 interpreter, \.{MWEB} use Bourne Shell as the interpreter.
 
 @<global variables@>=
-char interpreter[] = "/bin/sh";
+char interpreter[] = "sh";
 
 @* Parse input.  The main purpose of this phrase is extracting useful informations
 for tangling, and build index for sections and filters by hash tables.
@@ -265,8 +265,8 @@ give a plan in mapping sequences to their functions.
 In parsing for tangling, we want control sequences to be able to label the start and the end of some
 contents.  The contents is a block of text, can be code or name. So we define:
 \vskip 3pt
-\ctrllist{<}{start of a section name}
-\ctrllist{>}{end of a section name or end of a filter name, start of a code chunk}
+\ctrllist{{}{start of a section name}
+\ctrllist{}}{end of a section name or end of a filter name, start of a code chunk}
 \ctrllist{:}{end of a section name, followed by the filter name used in this section}
 \ctrllist{\it newline}{end of a code chunk}
 \vskip 3pt
@@ -425,16 +425,16 @@ end_filter_name_1()
 }
 @ Combine them to build functions defined by contexts and control sequences.
 @<prototypes@>=
-void others_left_angle_bracket_1(void);
-void name1_right_angle_bracket_1(void); /* |name1|'s |1| means section name */
-void name2_right_angle_bracket_1(void); /* |2| means filter name */
+void others_left_curly_bracket_1(void);
+void name1_right_curly_bracket_1(void); /* |name1|'s |1| means section name */
+void name2_right_curly_bracket_1(void); /* |2| means filter name */
 void name1_colon_1(void);
 void code_newline_1(void);
 
 @ Functions of left angle bracket.
 @c
 void
-others_left_angle_bracket_1()
+others_left_curly_bracket_1()
 {
 	context_1 = NAME_SECTION;
 	start_section_name_1();
@@ -450,14 +450,14 @@ others_left_angle_bracket_1()
 }
 
 void
-name1_right_angle_bracket_1()
+name1_right_curly_bracket_1()
 {
 	end_section_name_1();
 	START_CODE_CHUNK;
 }
 
 void
-name2_right_angle_bracket_1()
+name2_right_curly_bracket_1()
 {
 	end_filter_name_1();
 	START_CODE_CHUNK;
@@ -488,10 +488,10 @@ the number of contexts can be represented by |OTEHRS+1|, and \.{MWEB}
 only handle \.{ASCII} characters now.
 @<global variables@>=
 void (*func_map_1[OTHERS+1][UCHAR_MAX])(void) = {
-	[OTHERS]['<']		= others_left_angle_bracket_1,
-	[NAME_SECTION]['>']	= name1_right_angle_bracket_1,
+	[OTHERS]['{']		= others_left_curly_bracket_1,
+	[NAME_SECTION]['}']	= name1_right_curly_bracket_1,
 	[NAME_SECTION][':']	= name1_colon_1,
-	[NAME_FILTER]['>']	= name1_right_angle_bracket_1,
+	[NAME_FILTER]['}']	= name1_right_curly_bracket_1,
 	[CODE]['\n']		= code_newline_1
 };
 
@@ -521,14 +521,10 @@ language, translated by filter to produce corresponding \CEE/ code.
 \.{MWEB} has potential to do a lot of works, but this is the most important.
 
 @* Tangle up.  This is the core part of \.{MWEB}.
+For convenience, \.{MWEB} assume the existing of a section named {\it root},
+as its name suggests, it's the root node in the tree of sections.
 
 @<do tangling@>=
-@<prepare global variables for tangling up@>@;
-@<tangle up code chunks@>@;
-
-@ For convenience, \.{MWEB} assume the existing of a section named {\it root},
-as its name suggests, it's the root node in the tree of sections.
-@<tangle up code chunks@>=
 tangle_up("root");
 
 @
@@ -541,8 +537,9 @@ tangle_up(char *sec)
 	chunk *ckp;
 	int fd;
 
-	context_2 = PLAIN_CODE;
-	dest = &swap_area[0];
+
+	@<prepare global variables for tangling up@>@;
+
 	scp = (section *)hash_get(&sections, sec);
 	sha_1_str(sec);
 	fd = file_open(sha_1_h);
@@ -557,6 +554,7 @@ tangle_up(char *sec)
 	}
 
 	file_close(fd);
+	call_filter(scp);
 }
 
 @
@@ -591,7 +589,7 @@ for (cp = ckp->start; cp != ckp->end; cp++) {
 	} else {
 		pass_to_dest('@@');
 		CLEAR_SWAP;
-		pass_to_dest(*(cp-1));
+		pass_to_dest(*(cp));
 		CLEAR_SWAP;
 	}
 }
@@ -602,8 +600,8 @@ void tangle_up(char *);
 
 @ Control sequences.
 \vskip 3pt
-\ctrllist{<}{start of a section name being included}
-\ctrllist{>}{end of a section name being included}
+\ctrllist{{}{start of a section name being included}
+\ctrllist{}}{end of a section name being included}
 \ctrllist{(}{start of a section name being referenced}
 \ctrllist{)}{end of a section name being referenced}
 \vskip 3pt
@@ -619,7 +617,7 @@ char cur_section_name[MAXLINE];
 @
 @<prepare global variables for tangling up@>=
 context_2 = PLAIN_CODE;
-dest = NULL;
+dest = &swap_area[0];
 
 @
 @<prototypes@>=
@@ -674,30 +672,72 @@ void ref_sec(int, char *);
 void
 include_sec(int fd, char *sec)
 {
+	char fo[MAXLINE]; /* output file from section |sec| */
+	char sec_[MAXLINE];
+	strcpy(sec_, sec);
 	tangle_up(sec); /* ensure the section being included has been tangled */
-	sha_1_str(sec);
-	transfer(fd, sha_1_h);
+	strcpy(sec, sec_);
+	output_file(fo, sec);
+	transfer(fd, fo);
 }
 
 void
 ref_sec(int fd, char *sec)
 {
-	strcpy(swap_area, sec);
-	swap_end = swap_area + strlen(sec);
+	char sec_[MAXLINE];
+	strcpy(sec_, sec);
+	tangle_up(sec);
+	strcpy(sec, sec_);
+	output_file(swap_area, sec);
+	swap_end = swap_area + strlen(swap_area);
 	clear_swap(fd);
 }
 
+@ Some formats are used in mid products's name.
+@c
+void
+output_file(char *buf, char *sec)
+{
+	sha_1_str(sec);
+	strcpy(buf, sha_1_h);
+	strcat(buf, "_O");
+}
+
+@ |sec|'s unfiltered text.
+@c
+void
+sec_file(char *buf, char *sec)
+{
+	sha_1_str(sec);
+	strcpy(buf, sha_1_h);
+}
+
+@ Use |sec| as a filter.
+@c
+void
+filter_file(char *buf, char *sec)
+{
+	sha_1_str(sec);
+	strcpy(buf, sha_1_h);
+	strcat(buf, "_F");
+}
 @
 @<prototypes@>=
-void code_left_angle_bracket_2(int);
+void output_file(char *, char *);
+void sec_file(char *, char *);
+void filter_file(char *, char *);
+
+@
+@<prototypes@>=
+void code_left_curly_bracket_2(int);
 void code_left_circle_bracket_2(int);
-void name1_right_angle_bracket_2(int);
+void name1_right_curly_bracket_2(int);
 void name2_right_circle_bracket_2(int);
 
 @
 @c
 void
-code_left_angle_bracket_2(int fd)
+code_left_curly_bracket_2(int fd)
 {
 	context_2 = NAME_INC;
 	start_section_name_include_2(fd);
@@ -715,7 +755,7 @@ code_left_circle_bracket_2(int fd)
 @
 @c
 void
-name1_right_angle_bracket_2(int fd)
+name1_right_curly_bracket_2(int fd)
 {
 	context_2 = PLAIN_CODE;
 	end_section_name_include_2(fd);
@@ -733,11 +773,124 @@ name2_right_circle_bracket_2(int fd)
 @
 @<global variables@>=
 void (*func_map_2[PLAIN_CODE+1][UCHAR_MAX])(int) = {
-	[PLAIN_CODE]['<'] = code_left_angle_bracket_2,
+	[PLAIN_CODE]['{'] = code_left_curly_bracket_2,
 	[PLAIN_CODE]['('] = code_left_circle_bracket_2,
-	[NAME_INC]['>'] = name1_right_angle_bracket_2,
+	[NAME_INC]['}'] = name1_right_curly_bracket_2,
 	[NAME_REF][')'] = name2_right_circle_bracket_2
 };
+
+@* Filter.
+
+@<prototypes@>=
+void call_filter(section *);
+
+@
+@c
+void
+call_filter(section *scp)
+{
+	char fs[MAXLINE], ff[MAXLINE]; /* section file, filter file */
+	char fi[MAXLINE], fo[MAXLINE]; /* input file, output file */
+
+	sec_file(fi, scp->name);
+	output_file(fo, scp->name);
+	if (strlen(scp->filter) == 0) { /* no filter specified */
+		@<copy |fi| to |fo|@>@;
+		return;
+	}
+
+	output_file(fs, scp->filter); /* get unparsed filter file */
+	filter_file(ff, scp->filter);
+
+	tangle_up(scp->filter);
+
+	@<parse filter section |fs|, save result to |ff|@>@;
+	@<execute filter |ff|@>@;
+}
+
+@
+@<copy |fi| to |fo|@>=
+{
+	int fdi, fdo;
+	FILE *fpi, *fpo;
+	char c;
+
+	fdi = file_open(fi);
+	fpi = fdopen(fdi, "r");
+	fdo = file_open(fo);
+	fpo = fdopen(fdo, "w");
+
+	while ((c = fgetc(fpi)) != EOF) {
+		fputc(c, fpo);
+	}
+
+	fclose(fpi);
+	fclose(fpo);
+}
+
+@
+@<parse filter section |fs|, save result to |ff|@>=
+{
+	int fds, fdf;
+	FILE *fps, *fpf;
+	char c;
+
+	fds = file_open(fs);
+	fps = fdopen(fds, "r");
+	fdf = file_open(ff);
+	fpf = fdopen(fdf, "w");
+
+	while ((c = fgetc(fps)) != EOF) {
+		if (c == '@@') {
+			c = fgetc(fps);
+			@<handle control sequence for parsing filter@>@;
+		} else {
+			fputc(c, fpf);
+		}
+	}
+
+	fclose(fps);
+	fclose(fpf);
+
+}
+
+@
+@<execute filter |ff|@>=
+{
+	pid_t pid;
+	int stat;
+
+	if ((pid = fork()) == -1) {
+		err_sys("failed to execute filter %s", scp->filter);
+	} else if (pid == 0) {
+		fchdir(mid_dir);
+		execlp(interpreter, "sh", ff);
+	} else {
+		wait(&stat);
+	}
+}
+
+@ The parsing of filter follow the same pattern of the previous, but much simpler.
+\vskip 3pt
+\ctrllist{<}{reference to text going to be filtered}
+\ctrllist{>}{reference to text filtered}
+\ctrllist{@@}{insert a `@@'}
+\vskip 3pt
+@<handle control sequence for parsing filter@>=
+switch (c) {
+case '<':
+	fputs(fi, fpf);
+	break;
+case '>':
+	fputs(fo, fpf);
+	break;
+case '@@':
+	fputc('@@', fpf);
+	break;
+default:
+	fputc('@@', fpf);
+	fputc(c, fpf);
+}
 
 @** Weaving.
 @<do weaving@>=
@@ -1000,6 +1153,7 @@ used to get access to \CEE/ standard library and system calls.
 @<includes@>=
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <dirent.h>
 
@@ -1366,15 +1520,15 @@ when an error occur.  Mainly two conditions under consideration:
 2. Unrelated to a system call.
 
 @<prototypes@>=
-void err_sys(const char *, ...); /* condition 1, print a message and terminate */
-void err_dump(const char *, ...); /* condition 1, print a message, dump core, and terminate */
-void err_quit(const char *, ...); /* condition 2, print a message and terminate */
+void err_sys(char *, ...); /* condition 1, print a message and terminate */
+void err_dump(char *, ...); /* condition 1, print a message, dump core, and terminate */
+void err_quit(char *, ...); /* condition 2, print a message and terminate */
 
 @ Use a helper function |err_doit| to print message.
 Caller specifies |errnoflag| to decide whether to append |errno| imformation.
 @c
 void 
-err_doit(int errnoflag, const char* fmt, va_list ap)
+err_doit(int errnoflag, char* fmt, va_list ap)
 {
 	vsnprintf(line_buffer, MAXLINE-1, fmt, ap);
 	if (errnoflag)
@@ -1395,7 +1549,7 @@ print a message and terminate.
 	va_end(ap) ; \
 }
 void 
-err_sys(const char *fmt, ...)
+err_sys(char *fmt, ...)
 {
 	ERR_PRINT(1);
 	exit(1);
@@ -1405,7 +1559,7 @@ err_sys(const char *fmt, ...)
 print a message, dump core, and terminate.
 @c
 void 
-err_dump(const char *fmt, ...)
+err_dump(char *fmt, ...)
 {
 
 	ERR_PRINT(1);
@@ -1417,7 +1571,7 @@ err_dump(const char *fmt, ...)
 print a message and terminate.
 @c
 void
-err_quit(const char *fmt, ...)
+err_quit(char *fmt, ...)
 {
 	ERR_PRINT(0);
 	exit(1);

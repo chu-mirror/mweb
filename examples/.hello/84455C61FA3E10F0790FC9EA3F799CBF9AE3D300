@@ -1,0 +1,5 @@
+
+printf("Hello from MWEB (by AUTHOR)\n");
+
+printf("Version VERSION\n");
+

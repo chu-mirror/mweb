@@ -14,6 +14,9 @@ all: ${ALL}
 
 doc: ${DOC}
 
+ex: all
+	cd examples; make
+
 clean:
 	${RM} ${DOC} ${ALL}
 	@${RM} ${LIT:.w=.toc} ${LIT:.w=.log} ${LIT:.w=.tex} \

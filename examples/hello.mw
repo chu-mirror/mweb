@@ -1,0 +1,36 @@
+A simple program, shows the basic usage of MWEB.
+
+@{root @: program hello@}=
+#include <stdio.h>
+int
+main()
+{
+	@{hello from me@}
+}
+@
+
+@{hello from me@: substitute with my info@}=
+printf("Hello from MWEB (by AUTHOR)\n");
+@{print version@}
+@
+
+@{print version@}=
+printf("Version VERSION\n");
+@
+
+@{my info@}=
+define(AUTHOR, `Zhizhong Ma')dnl
+define(VERSION, `0.1')dnl
+@
+
+Filters.
+
+@{substitute with my info@}=
+m4 @(my info@) @< > @>
+@
+
+@{program hello@}=
+cp @< @<.c
+cc -std=c90 -o hello @<.c
+mv hello ..
+@
