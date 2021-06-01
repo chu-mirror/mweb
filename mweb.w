@@ -544,7 +544,8 @@ tangle_up(char *sec)
 	context_2 = PLAIN_CODE;
 	dest = &swap_area[0];
 	scp = (section *)hash_get(&sections, sec);
-	fd = file_open(sec);
+	sha_1_str(sec);
+	fd = file_open(sha_1_h);
 
 	for (ckp = scp->code; ckp != NULL; ckp = ckp->next) {
 		@<tangle each code chunk@>@;
@@ -674,7 +675,8 @@ void
 include_sec(int fd, char *sec)
 {
 	tangle_up(sec); /* ensure the section being included has been tangled */
-	transfer(fd, sec);
+	sha_1_str(sec);
+	transfer(fd, sha_1_h);
 }
 
 void
@@ -739,16 +741,6 @@ void (*func_map_2[PLAIN_CODE+1][UCHAR_MAX])(int) = {
 
 @** Weaving.
 @<do weaving@>=
-{
-	int fd;
-	fd = file_open("test");
-	write(fd, buffer, buffer_end-buffer);
-	file_close(fd);
-
-	fd = file_open("test2");
-	transfer(fd, "test");
-	file_close(fd);
-}
 
 @** I/O control.
 There are two kinds of I/O, line-oriented and byte-oriented.
@@ -1162,22 +1154,23 @@ hash_get(hash_table *tbl, char *v)
 
 @* SHA-1.  An implementation of \.{SHA-1}.
 @f word int
+@f uint32_t int
 @f block int
 @f block_stream int
 @<typedefs@>=
 typedef uint32_t word;
-typedef struct block {
+typedef struct block_run {
 	word arr[16];
-	struct block *next;
-} block;
-typedef struct block_stream {
-	struct block *head;
-	struct block *end;
-} block_stream;
+	struct block_run *next;
+} block_run;
+
+@ A buffer for result.
+@<global variables@>=
+char sha_1_h[64];
 
 @
 @<prototypes@>=
-void sha_1_digest(char *, block_stream *);
+void sha_1_digest(block_run *);
 
 @ The four functions and circular left shift.
 @<prototypes@>=
@@ -1243,7 +1236,7 @@ word sha_1_ks[4] = {
 @
 @c
 void
-sha_1_digest(char *h, block_stream *st)
+sha_1_digest(block_run *blks)
 {
 	word buf1[5], temp, buf2[85] = {
 		0x67452301, 0xEFCDAB89,
@@ -1251,19 +1244,20 @@ sha_1_digest(char *h, block_stream *st)
 		0xC3D2E1F0
 	};
 	int i;
-	block *blp, *blp_t = NULL;
+	block_run *blp, *blp_t = NULL;
 
-	for (blp = st->head; blp != st->end; blp = blp->next) {
+	for (blp = blks; blp; blp = blp->next) {
 		if (blp_t) FREE(blp_t);
 		@<digest block pointed by |blp|@>@;
 		blp_t = blp;
 	}
 	for (i = 0; i < 40; i++) {
-		int hex;
-		hex = buf2[i/8] >> 6;
-		buf2[i/8] <<= 2;
-		h[i] = char_n_to_hex(hex);
+		unsigned char hex;
+		hex = buf2[i/8] >> (7*4);
+		buf2[i/8] <<= 4;
+		sha_1_h[i] = char_n_to_hex(hex);
 	}
+	sha_1_h[40] = '\0';
 }
 
 @
@@ -1294,16 +1288,75 @@ sha_1_digest(char *h, block_stream *st)
 	}
 }
 
-@ Build a |block_stream| from a string or a file descriptor.
+@ Build blocks from a buffer.
 @c
-block_stream *
-build_blocks_str(char *v)
+block_run *
+build_blocks(char *v)
 {
-	int len;
-	block_stream *blsp;
+	int len, pad_len, i;
+	block_run *blks = NULL, *blp1, *blp2;
 
 	len = strlen(v);
+
+	i = 0;
+	while (i + 64 <= len) {
+		NEW0(blp1);
+		strncpy((char *)blp1->arr, v+i, 64);
+		if (blks == NULL) {
+			blks = blp1;
+			continue;
+		}
+		blp2->next = blp1;
+		blp2 = blp1;
+
+		i += 64;
+	}
+	@<build the padding block@>@;
+
+	return blks;
 }
+
+@
+@<build the padding block@>=
+pad_len = (64 - (len%64)) %64;
+if (pad_len == 0) return blks;
+
+NEW0(blp1);
+strcpy((char *)blp1->arr, v+i);
+strcat((char *)blp1->arr, "\x80");
+
+if (blks == NULL) {
+	blks = blp1;
+} else {
+	blp2->next = blp1;
+}
+blp2 = blp1;
+
+if (pad_len < 3) {
+	NEW0(blp1);
+	blp2->next = blp1;
+	blp2 = blp1;
+}
+
+blp2->arr[15] = len * 8; /* the length of message is assumed less than $2^32-1$ */
+
+@
+@<prototypes@>=
+block_run *build_blocks(char *);
+
+@ Get |sha_1_h| from various sources.
+@c
+void
+sha_1_str(char *v)
+{
+	block_run *blks;
+	blks = build_blocks(v);
+	sha_1_digest(blks);
+}
+
+@
+@<prototypes@>=
+void sha_1_str(char *);
 
 @* Error handling.  Functions used to locate different conditions
 when an error occur.  Mainly two conditions under consideration:
