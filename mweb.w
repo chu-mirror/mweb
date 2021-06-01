@@ -296,15 +296,16 @@ char *dest;
 
 @
 @c
-void
+int
 pass_to_dest(char c)
 {
 	if (dest) *(dest++) = c;
+	return dest != NULL;
 }
 
 @
 @<prototypes@>=
-void pass_to_dest(char);
+int pass_to_dest(char);
 
 @
 @<prepare global variables before parsing for tangling@>=
@@ -531,6 +532,70 @@ as its name suggests, it's the root node in the tree of sections.
 tangle_up("root");
 
 @
+@c
+void
+tangle_up(char *sec)
+{
+	char *cp; /* do not use |loc|, this process can be invoked recursively */
+	section *scp;
+	chunk *ckp;
+	int fd;
+
+	context_2 = PLAIN_CODE;
+	dest = &swap_area[0];
+	scp = (section *)hash_get(&sections, sec);
+	fd = file_open(sec);
+
+	for (ckp = scp->code; ckp != NULL; ckp = ckp->next) {
+		@<tangle each code chunk@>@;
+	}
+
+	if (dest != &swap_area[0]) {
+		swap_end = dest;
+		clear_swap(fd);
+	}
+
+	file_close(fd);
+}
+
+@
+@<tangle each code chunk@>=
+#define CLEAR_SWAP { \
+	if (context_2 == PLAIN_CODE && dest-swap_area == SWAP_LENGTH) { \
+		swap_end = dest; \
+		clear_swap(fd); \
+		dest = &swap_area[0]; \
+	} \
+}
+for (cp = ckp->start; cp != ckp->end; cp++) {
+	if (*cp == '@@') {
+		cp++;
+		@<handle control sequence for tangling up@>@;
+	} else {
+		pass_to_dest(*cp);
+		CLEAR_SWAP;
+	}
+}
+#undef CLEAR_SWAP
+
+@ Use the same strategy from previous chapter.
+@<handle control sequence for tangling up@>=
+{
+	void (*fnp)(int);
+
+	fnp = func_map_2[context_2][*cp];
+
+	if (fnp) {
+		(*fnp)(fd);
+	} else {
+		pass_to_dest('@@');
+		CLEAR_SWAP;
+		pass_to_dest(*(cp-1));
+		CLEAR_SWAP;
+	}
+}
+
+@
 @<prototypes@>=
 void tangle_up(char *);
 
@@ -543,7 +608,7 @@ void tangle_up(char *);
 \vskip 3pt
 @f contexts_2 int
 @<typedefs@>=
-typedef enum contexts_2 {NAME_INC_CODE, NAME_REF_CODE, PLAIN_CODE} contexts_2;
+typedef enum contexts_2 {NAME_INC, NAME_REF, PLAIN_CODE} contexts_2;
 
 @ Like parsing, I use a new context for tangling up.
 @<global variables@>=
@@ -557,42 +622,120 @@ dest = NULL;
 
 @
 @<prototypes@>=
-void start_section_name_include_2(void);
-void end_section_name_include_2(void);
-void start_section_name_reference_2(void);
-void end_section_name_reference_2(void);
+void start_section_name_include_2(int);
+void end_section_name_include_2(int);
+void start_section_name_reference_2(int);
+void end_section_name_reference_2(int);
 
 @
 @c
 void
-start_section_name_include_2()
+start_section_name_include_2(int fd)
 {
+	swap_end = dest;
+	clear_swap(fd);
 	dest = cur_section_name;
 }
 
 void
-end_section_name_include_2()
+end_section_name_include_2(int fd)
 {
 	*dest = '\0';
-	//|include_sec(cur_section_name);|
-	dest = NULL;
+	include_sec(fd, cur_section_name);
+	dest = &swap_area[0];
 }
 
 @
 @c
 void
-start_section_name_reference_2()
+start_section_name_reference_2(int fd)
 {
+	swap_end = dest;
+	clear_swap(fd);
 	dest = cur_section_name;
 }
 
 void
-end_section_name_reference_2()
+end_section_name_reference_2(int fd)
 {
 	*dest = '\0';
-	//|ref_sec(cur_section_name);|
-	dest = NULL;
+	ref_sec(fd, cur_section_name);
+	dest = &swap_area[0];
 }
+
+@ \.{MWEB} uses two special functions to handle including and referencing.
+@<prototypes@>=
+void include_sec(int, char *);
+void ref_sec(int, char *);
+
+@
+@c
+void
+include_sec(int fd, char *sec)
+{
+	tangle_up(sec); /* ensure the section being included has been tangled */
+	transfer(fd, sec);
+}
+
+void
+ref_sec(int fd, char *sec)
+{
+	strcpy(swap_area, sec);
+	swap_end = swap_area + strlen(sec);
+	clear_swap(fd);
+}
+
+@
+@<prototypes@>=
+void code_left_angle_bracket_2(int);
+void code_left_circle_bracket_2(int);
+void name1_right_angle_bracket_2(int);
+void name2_right_circle_bracket_2(int);
+
+@
+@c
+void
+code_left_angle_bracket_2(int fd)
+{
+	context_2 = NAME_INC;
+	start_section_name_include_2(fd);
+}
+
+@
+@c
+void
+code_left_circle_bracket_2(int fd)
+{
+	context_2 = NAME_REF;
+	start_section_name_reference_2(fd);
+}
+
+@
+@c
+void
+name1_right_angle_bracket_2(int fd)
+{
+	context_2 = PLAIN_CODE;
+	end_section_name_include_2(fd);
+}
+
+@
+@c
+void
+name2_right_circle_bracket_2(int fd)
+{
+	context_2 = PLAIN_CODE;
+	end_section_name_reference_2(fd);
+}
+
+@
+@<global variables@>=
+void (*func_map_2[PLAIN_CODE+1][UCHAR_MAX])(int) = {
+	[PLAIN_CODE]['<'] = code_left_angle_bracket_2,
+	[PLAIN_CODE]['('] = code_left_circle_bracket_2,
+	[NAME_INC]['>'] = name1_right_angle_bracket_2,
+	[NAME_REF][')'] = name2_right_circle_bracket_2
+};
 
 @** Weaving.
 @<do weaving@>=
@@ -831,7 +974,7 @@ clear_swap(int fd)
 void
 transfer(int fd, char *f)
 {
-	int fd_t; /* |fd| being transfered */
+	int fd_t;
 	ssize_t n1, n2;
 	fd_t = file_open(f);
 
@@ -877,6 +1020,7 @@ used to get access to \CEE/ standard library and system calls.
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 @* String operation.  \CEE/ standard library does not provide
 some useful operations.
@@ -885,6 +1029,7 @@ some useful operations.
 char *skip_blank(char *); /* skip continues blanks */
 void strip_blank(char *);
 void strip_suffix(char *);
+char char_n_to_hex(int);
 
 @ The blanks can be tabs and spaces.
 @c
@@ -918,6 +1063,18 @@ strip_suffix(char *s)
 
 	if (dotp && slp < dotp) {
 		*dotp = '\0';
+	}
+}
+
+@
+@c
+char
+char_n_to_hex(int n)
+{
+	if (n > 9) {
+		return 'A' + n - 10;
+	} else {
+		return '0' + n;
 	}
 }
 
@@ -964,7 +1121,7 @@ typedef struct hash_table {
 	hash_entry *entries[hash_size];
 } hash_table;
 
-@ Insert a element to |hash_table|.
+@ Insert an element to |hash_table|.
 @c
 void
 hash_insert(hash_table *tbl, char *v, void *e)
@@ -1004,8 +1161,149 @@ hash_get(hash_table *tbl, char *v)
 }
 
 @* SHA-1.  An implementation of \.{SHA-1}.
+@f word int
+@f block int
+@f block_stream int
+@<typedefs@>=
+typedef uint32_t word;
+typedef struct block {
+	word arr[16];
+	struct block *next;
+} block;
+typedef struct block_stream {
+	struct block *head;
+	struct block *end;
+} block_stream;
+
+@
 @<prototypes@>=
-void sha_1_name(char *, char *);
+void sha_1_digest(char *, block_stream *);
+
+@ The four functions and circular left shift.
+@<prototypes@>=
+word sha_1_f0(word, word, word);
+word sha_1_f1(word, word, word);
+word sha_1_f2(word, word, word);
+word sha_1_f3(word, word, word);
+word cir_sll(word, int);
+
+@
+@c
+word
+sha_1_f0(word B, word C, word D)
+{
+	return (B & C) | (~B & D);
+}
+
+word
+sha_1_f1(word B, word C, word D)
+{
+	return B ^ C ^ D;
+}
+
+word
+sha_1_f2(word B, word C, word D)
+{
+	return (B & C) | (B & D) | (C & D);
+}
+
+word
+sha_1_f3(word B, word C, word D)
+{
+	return B ^ C ^ D;
+}
+
+word
+cir_sll(word X, int n)
+{
+	return (X << n) | (X >> (32-n));
+}
+
+@
+@<global variables@>=
+word (*sha_1_fs[4])(word, word, word) = {
+	sha_1_f0, sha_1_f1, sha_1_f2, sha_1_f3
+};
+
+@
+@<macros@>=
+#define sha_1_f(t) (*sha_1_fs[(int)(t)/20])
+
+@ The four constants.
+@<global variables@>=
+word sha_1_ks[4] = {
+	0x5A827999, 0x6ED9EBA1,
+	0x8F1BBCDC, 0xCA62C1D6
+};
+
+@
+@<macros@>=
+#define sha_1_k(t) (sha_1_ks[(int)(t)/20])
+
+@
+@c
+void
+sha_1_digest(char *h, block_stream *st)
+{
+	word buf1[5], temp, buf2[85] = {
+		0x67452301, 0xEFCDAB89,
+		0x98BADCFE, 0x10325476,
+		0xC3D2E1F0
+	};
+	int i;
+	block *blp, *blp_t = NULL;
+
+	for (blp = st->head; blp != st->end; blp = blp->next) {
+		if (blp_t) FREE(blp_t);
+		@<digest block pointed by |blp|@>@;
+		blp_t = blp;
+	}
+	for (i = 0; i < 40; i++) {
+		int hex;
+		hex = buf2[i/8] >> 6;
+		buf2[i/8] <<= 2;
+		h[i] = char_n_to_hex(hex);
+	}
+}
+
+@
+@<digest block pointed by |blp|@>=
+{
+	int t;
+
+	for (t = 0; t < 16; t++) {
+		buf2[t+5] = blp->arr[t];
+	}
+	for (t = 16 + 5; t < 80 + 5; t++) {
+		buf2[t] = cir_sll(buf2[t-3], 1) ^ buf2[t-8] ^ buf2[t-14] ^ buf2[t-16];
+	}
+	for (t = 0; t < 5; t++) {
+		buf1[t] = buf2[t];
+	}
+	for (t = 0; t < 80; t++) {
+		temp = cir_sll(buf1[0], 5) + sha_1_f(t)(buf1[1], buf1[2], buf1[3])
+			+ buf1[4] + buf2[t+5] + sha_1_k(t);
+		buf1[4] = buf1[3];
+		buf1[3] = buf1[2];
+		buf1[2] = cir_sll(buf1[1], 30);
+		buf1[1] = buf1[0];
+		buf1[0] = temp;
+	}
+	for (t = 0; t < 5; t++) {
+		buf2[t] += buf1[t];
+	}
+}
+
+@ Build a |block_stream| from a string or a file descriptor.
+@c
+block_stream *
+build_blocks_str(char *v)
+{
+	int len;
+	block_stream *blsp;
+
+	len = strlen(v);
+}
 
 @* Error handling.  Functions used to locate different conditions
 when an error occur.  Mainly two conditions under consideration:
