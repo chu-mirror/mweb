@@ -178,7 +178,7 @@ if (line_buffer[0] == '@@') {
 		} else {
 			do {
 				e++;
-			} while(isblank(*e));
+			} while(!isspace(*e));
 		}
 		*e = '\0';
 	}

@@ -1,6 +1,8 @@
+@i compile-c.mw
+
 A simple program, shows the basic usage of MWEB.
 
-@{root @: program hello@}=
+@{root @: C program@}=
 #include <stdio.h>
 int
 main()
@@ -26,14 +28,12 @@ define(AUTHOR, `Zhizhong Ma')dnl
 define(VERSION, `0.1')dnl
 @
 
+@{program info@}=
+define(PROG, `hello')dnl
+@
+
 Filters.
 
 @{substitute with my info@}=
 m4 @(my info@) @< > @>
-@
-
-@{program hello@}=
-cp @< @<.c
-cc -std=c90 -o hello @<.c
-mv hello ..
 @
