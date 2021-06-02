@@ -1,4 +1,5 @@
 @i compile-c.mw
+@i info.mw
 
 A simple program, shows the basic usage of MWEB.
 
@@ -11,7 +12,7 @@ main()
 }
 @
 
-@{hello from me@: substitute with my info@}=
+@{hello from me@: add mweb's info@}=
 printf("Hello from MWEB (by AUTHOR)\n");
 @
 
@@ -23,17 +24,17 @@ printf("Hello from MWEB (by AUTHOR)\n");
 printf("Version VERSION\n");
 @
 
-@{my info@}=
-define(AUTHOR, `Zhizhong Ma')dnl
-define(VERSION, `0.1')dnl
+@{mweb's info @: info@}=
+AUTHOR		Zhizhong Ma
+VERSION		0.1
 @
 
-@{program info@}=
-define(PROG, `hello')dnl
+@{program info @: info@}=
+PROG		hello
 @
 
 Filters.
 
-@{substitute with my info@}=
-m4 @(my info@) @< > @>
+@{add mweb's info@}=
+m4 @(mweb's info@) @< > @>
 @
