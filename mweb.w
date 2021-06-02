@@ -1,3 +1,6 @@
+% special characters
+\def\lbrace{{\tt \char123}}
+\def\rbrace{{\tt \char125}}
 % control sequence
 \def\ctrllist#1#2{\hbox{\hskip 0.5in\ctrl#1 #2}}
 \def\ctrl#1{\hbox{\tt @@{#1}}}
@@ -150,11 +153,11 @@ read_input(ifile *ifp)
 @<handle control sequence when in inputting@>=
 if (line_buffer[0] == '@@') {
 	switch(line_buffer[1]) { /* use a switch for further extending */
-	case 'i':
+	case 'i':@;
 		@<parse filename and include it@>@;
 		skip = 1; /* discard \ctrl{i}\ line */
 		break;
-	default:
+	default:@;
 		break;
 	}
 }
@@ -199,10 +202,10 @@ if (*e != '"') {
 
 @** Tangling.
 Like other literate programming tools, code is represented as code chunks.
-Each code chunk describe a part of the whole program, they can be combined in
+Each code chunk describes a part of the whole program, they can be combined in
 mainly two ways, including and concatenating.  Concatenating is simply combining them
-one by one, \.{MWEB} does on special things in combining.  The combined
-chunks act as a new unit, called {\t section}, and each section has a name.
+one by one, \.{MWEB} does nothing special in combining.  The combined
+chunks act as a new unit, called {\it section}, and each section has a name.
 By now, \.{MWEB} is not different with other tools, but it will diverge from tradition
 soon when including is under consideration. 
 
@@ -265,10 +268,10 @@ give a plan in mapping sequences to their functions.
 In parsing for tangling, we want control sequences to be able to label the start and the end of some
 contents.  The contents is a block of text, can be code or name. So we define:
 \vskip 3pt
-\ctrllist{{}{start of a section name}
-\ctrllist{}}{end of a section name or end of a filter name, start of a code chunk}
+\ctrllist{\lbrace}{start of a section name}
+\ctrllist{\rbrace}{end of a section name or end of a filter name, start of a code chunk}
 \ctrllist{:}{end of a section name, followed by the filter name used in this section}
-\ctrllist{\it newline}{end of a code chunk}
+\ctrllist{{\it newline}}{end of a code chunk}
 \vskip 3pt
 You might have noticed that there are some rules of places they appear.  For example, you can not
 place start of another section name in a section name.  From this observation,
@@ -487,12 +490,12 @@ code_newline_1()
 the number of contexts can be represented by |OTEHRS+1|, and \.{MWEB}
 only handle \.{ASCII} characters now.
 @<global variables@>=
-void (*func_map_1[OTHERS+1][UCHAR_MAX])(void) = {
-	[OTHERS]['{']		= others_left_curly_bracket_1,
-	[NAME_SECTION]['}']	= name1_right_curly_bracket_1,
-	[NAME_SECTION][':']	= name1_colon_1,
-	[NAME_FILTER]['}']	= name1_right_curly_bracket_1,
-	[CODE]['\n']		= code_newline_1
+void (*func_map_1[OTHERS+1][UCHAR_MAX])(void) = {@/
+	[OTHERS]['{']		= others_left_curly_bracket_1,@/
+	[NAME_SECTION]['}']	= name1_right_curly_bracket_1,@/
+	[NAME_SECTION][':']	= name1_colon_1,@/
+	[NAME_FILTER]['}']	= name1_right_curly_bracket_1,@/
+	[CODE]['\n']		= code_newline_1@/
 };
 
 @ We can complete the parsing now.
@@ -600,8 +603,8 @@ void tangle_up(char *);
 
 @ Control sequences.
 \vskip 3pt
-\ctrllist{{}{start of a section name being included}
-\ctrllist{}}{end of a section name being included}
+\ctrllist{\lbrace}{start of a section name being included}
+\ctrllist{\rbrace}{end of a section name being included}
 \ctrllist{(}{start of a section name being referenced}
 \ctrllist{)}{end of a section name being referenced}
 \vskip 3pt
@@ -772,11 +775,11 @@ name2_right_circle_bracket_2(int fd)
 
 @
 @<global variables@>=
-void (*func_map_2[PLAIN_CODE+1][UCHAR_MAX])(int) = {
-	[PLAIN_CODE]['{'] = code_left_curly_bracket_2,
-	[PLAIN_CODE]['('] = code_left_circle_bracket_2,
-	[NAME_INC]['}'] = name1_right_curly_bracket_2,
-	[NAME_REF][')'] = name2_right_circle_bracket_2
+void (*func_map_2[PLAIN_CODE+1][UCHAR_MAX])(int) = {@/
+	[PLAIN_CODE]['{'] = code_left_curly_bracket_2,@/
+	[PLAIN_CODE]['('] = code_left_circle_bracket_2,@/
+	[NAME_INC]['}'] = name1_right_curly_bracket_2,@/
+	[NAME_REF][')'] = name2_right_circle_bracket_2@/
 };
 
 @* Filter.
@@ -874,7 +877,7 @@ call_filter(section *scp)
 \vskip 3pt
 \ctrllist{<}{reference to text going to be filtered}
 \ctrllist{>}{reference to text filtered}
-\ctrllist{@@}{insert a `@@'}
+\ctrllist{@@}{insert an `{\tt @@}'}
 \vskip 3pt
 @<handle control sequence for parsing filter@>=
 switch (c) {
