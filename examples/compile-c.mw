@@ -4,6 +4,6 @@ m4 @(program info@) @< > @>
 
 @{C program @: specify the name@}=
 cp @< @<.c
-cc -o PROG @<.c
-mv PROG ..
+cc -o @> @<.c
+cp @> ../PROG
 @
