@@ -11,6 +11,9 @@ main()
 
 @{hello from me@: substitute with my info@}=
 printf("Hello from MWEB (by AUTHOR)\n");
+@
+
+@{hello from me@}=
 @{print version@}
 @
 

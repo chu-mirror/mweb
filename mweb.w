@@ -338,21 +338,21 @@ void end_code_chunk_1(void);
 
 @ The basic operations take effect on following global variables.
 @<global variables@>=
-section *cur_section; /* current section */
+char name_buffer[8][MAXLINE]; /* there may be many names to save */
 chunk *cur_chunk; /* current code chunk */
 hash_table sections;
+
+@ We need to save two names in this phrase.
+@<macros@>=
+#define cur_section_name name_buffer[0]
+#define cur_filter_name name_buffer[1]
 
 @
 @c
 void
 start_section_name_1()
 {
-	section *scp;
-
-	NEW(scp);
-	cur_section = scp;
-	dest = scp->name;
-
+	dest = cur_section_name;
 	loc = skip_blank(loc);
 }
 
@@ -363,23 +363,53 @@ end_section_name_1()
 {
 
 	*dest = '\0';
-
-	strip_blank(cur_section->name);
-	hash_insert(&sections, cur_section->name, cur_section);
-
+	strip_blank(cur_section_name);
 	dest = NULL;
 }
 
 @
 @c
-void start_code_chunk_1()
+void
+start_code_chunk_1()
 {
 	chunk *ckp;
 
-	NEW(ckp);
+	NEW0(ckp);
 	cur_chunk = ckp;
 	ckp->start = loc;
+
+	@<add new code chunk to current section@>@;
 }
+
+@
+@<add new code chunk to current section@>=
+{
+	section *scp;
+
+	scp = hash_get(&sections, cur_section_name);
+
+	if (scp == NULL) {
+		@<create a new section@>@;
+	}
+
+	if (!scp->code) {
+		scp->code = cur_chunk;
+	} else {
+		chunk *ckp_t;
+		for (ckp_t = scp->code; ckp_t->next; ckp_t = ckp_t->next)
+			;
+		ckp_t->next = cur_chunk;
+	}
+}
+
+@
+@<create a new section@>=
+NEW(scp);
+strcpy(scp->name, cur_section_name);
+if (strlen(cur_filter_name)) {
+	strcpy(scp->filter, cur_filter_name);
+}
+hash_insert(&sections, cur_section_name, scp);
 
 @
 @c
@@ -387,32 +417,18 @@ void
 end_code_chunk_1()
 {
 	cur_chunk->end = loc-2;
-
-	@<add new code chunk to current section@>@;
-
 	cur_chunk = NULL;
-	cur_section = NULL;
+	cur_section_name[0] = '\0';
+	cur_filter_name[0] = '\0';
 }
 
-@
-@<add new code chunk to current section@>=
-{
-	if (!cur_section->code) {
-		cur_section->code = cur_chunk;
-	} else {
-		chunk *ckp_t;
-		for (ckp_t = cur_section->code; ckp_t->next; ckp_t = ckp_t->next)
-			;
-		ckp_t->next = cur_chunk;
-	}
-}
 
 @
 @c
 void
 start_filter_name_1()
 {
-	dest = cur_section->filter;
+	dest = cur_filter_name;
 	loc = skip_blank(loc);
 }
 
@@ -422,8 +438,7 @@ void
 end_filter_name_1()
 {
 	*dest = '\0';
-	strip_blank(cur_section->filter);
-
+	strip_blank(cur_filter_name);
 	dest = NULL;
 }
 @ Combine them to build functions defined by contexts and control sequences.
@@ -615,7 +630,6 @@ typedef enum contexts_2 {NAME_INC, NAME_REF, PLAIN_CODE} contexts_2;
 @ Like parsing, I use a new context for tangling up.
 @<global variables@>=
 contexts_2 context_2;
-char cur_section_name[MAXLINE];
 
 @
 @<prepare global variables for tangling up@>=
