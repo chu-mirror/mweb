@@ -6,6 +6,9 @@ LIT = mweb.w
 DOC = ${LIT:.w=.pdf}
 ALL = ${LIT:.w=}
 
+PREFIX = /usr/local
+BINDIR = ${PREFIX}/bin
+
 .SUFFIXES: .pdf
 .tex.pdf:
 	pdftex $<
@@ -22,3 +25,6 @@ clean:
 	@${RM} ${LIT:.w=.toc} ${LIT:.w=.log} ${LIT:.w=.tex} \
 		${LIT:.w=.scn} ${LIT:.w=.idx} ${LIT:.w=.c}
 	@cd examples; make clean
+
+install:
+	cp mweb ${BINDIR}

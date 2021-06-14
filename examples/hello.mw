@@ -8,15 +8,19 @@ A simple program, shows the basic usage of MWEB.
 int
 main()
 {
-	@{hello from me@}
+	@{say hello@}
 }
 @
 
-@{hello from me@: add mweb's info@}=
-printf("Hello from MWEB (by AUTHOR)\n");
+@{say hello @: add mweb's info@}=
+@{hello from me@}
 @
 
 @{hello from me@}=
+printf("Hello from MWEB (by AUTHOR)\n");
+@
+
+@{say hello@}=
 @{print version@}
 @
 
