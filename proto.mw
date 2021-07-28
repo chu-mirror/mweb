@@ -1,0 +1,14 @@
+@c Introduction
+
+@{literate programming tool mweb@}=
+@{definitions@}
+@
+
+@{definitions@}=
+(define bar "version 0.01")
+@{author@}
+@
+
+@{author@}=
+(define author "Zhizhong Ma")
+@
