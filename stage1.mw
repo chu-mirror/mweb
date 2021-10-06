@@ -1,0 +1,15 @@
+Here we start stage1, the next step.
+
+core functions:
+@{stage1's functions@}
+(define (tangle file)
+  '())
+@
+
+weave:
+@{stage1's functions@}
+(define (weave file)
+  '())
+@
+
+The END.
