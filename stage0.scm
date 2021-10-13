@@ -1,16 +1,30 @@
-;; core
+;;; core
+
+;; The major interface of mweb,
+;; every stage must have one.
 (define (tangle file)
   (let* ((contents (get-contents file))
 	 (chunks (extract-code-chunks contents)))
     (combine chunks)))
 
+;; The code chunks are just strings now,
+;; combine them by appending them one by one
+;; to build the final program of stage 1.
 (define (combine chunks)
   (fold-left string-append "" chunks))
 
+;; Use regular expression to extract code chunks.
+#|
+    A code chunk is labeled as:
+
+    @{code chunks in stage 1@}
+    ...
+    @
+|#
 (define (extract-code-chunks contents)
   (let ((search (regsexp-search-string-forward
 		 (compile-regsexp
-		  '(seq "@{" (* (any-char)) "@}"
+		  '(seq "@{code chunks in stage 1@}"
 			(group code (*? (alt (any-char) #\newline)))
 			#\@ (char-in " \n\t")))
 		 contents)))
@@ -21,14 +35,29 @@
 		       (string-tail contents next-start))))
 	'())))
 
-;; I/O
-(define file-size-max 8192) ; 2^13 bytes
+;;; I/O
+;; The I/O operations are simply read in
+;; or write out strings at this point,
+;; procedure get-contents is shared among
+;; stages.
+(define file-size-max (expt 2 20)) ; 1MB
 (define (get-contents file)
   (call-with-input-file file
     (lambda (port)
       (read-string file-size-max port))))
 
-;; stages
+;;; Implementation of stages
+;; The following procedures form the driver
+;; of mweb's interpreting system.  Each stage
+;; can be regarded as an implementation of
+;; a subset of mweb's grammer.
+;; Stage 0 is written in pure scheme, so it
+;; can be interpreted by scheme interpreter directly.
+;; Following stages require the previous stage's
+;; interpretation.  The implementation in stage 0
+;; is able to understand grammer in stage 1, so on.
+;; This part of code does not belong to the specification
+;; of mweb, written for the building of mweb.
 (define (get-next-stage-src from to)
   (call-with-output-file (stage-exec-name to)
     (lambda (port)

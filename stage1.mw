@@ -1,15 +1,28 @@
-Here we start stage1, the next step.
+Here we start stage1, the next step.  The implementation in stage 0
+allows only us to seperate comments from codes.  It's not a big improvement,
+but at least let us get rid of the pain suffering from formatting code, so that
+I can write this stage in a pleasure way like writing a normal article.
 
-core functions:
-@{stage1's functions@}
+We have mentioned the concept of code chunks, like any other objects,
+code chunks can also have name and value.  This stage's object is developing
+a new strategy at combining code chunks.  The new strategy gives code chunks
+names, and let code chunks be able to be refered by their name.
+
+The tangle procedure now has an extra step, we do not extract chunks
+directly from string now, we parse the string first.
+@{code chunks in stage 1@}
 (define (tangle file)
-  '())
+  (let* ((contents (get-contents file))
+	 (objects (parse-contents contents))
+	 (chunks (extract-code-chunks objects)))
+    (combine chunks)))
 @
 
-weave:
-@{stage1's functions@}
-(define (weave file)
-  '())
+Because the grammer will be become more and more complicated from now on,
+it's a good idea to build the parsing procedures at this point.
+MIT-scheme contains a useful library for this purpose.
+@{code chunks in stage 1@}
+(load-option '*parser)
 @
 
-The END.
+
