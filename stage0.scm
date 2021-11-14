@@ -3,9 +3,7 @@
 ;; The major interface of mweb,
 ;; every stage must have one.
 (define (tangle file)
-  (let* ((contents (get-contents file))
-	 (chunks (extract-code-chunks contents)))
-    (combine chunks)))
+  (combine (extract-code-chunks (get-contents file))))
 
 ;; The code chunks are just strings now,
 ;; combine them by appending them one by one
@@ -66,10 +64,9 @@
 		    port))))
 (define (build-next-environment from to)
   (get-next-stage-src from to)
-  (let ((next-env (make-top-level-environment)))
-    (eval `(begin (load ,(stage-exec-name to))
-		  (the-environment))
-	  next-env)))
+  (let ((next-env (make-top-level-environment '(get-contents) `(,get-contents))))
+    (load (stage-exec-name to) next-env)
+    next-env))
 
 (define (stage-exec-name stage-suf)
   (string-append "stage" stage-suf ".scm"))
