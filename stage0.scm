@@ -24,7 +24,7 @@
 		 (compile-regsexp
 		  '(seq "@{code chunks in stage 1@}"
 			(group code (*? (alt (any-char) #\newline)))
-			#\@ (char-in " \n\t")))
+			"@\n" ))
 		 contents)))
     (if search
 	(let ((chunk (cdr (assoc 'code (cddr search))))
