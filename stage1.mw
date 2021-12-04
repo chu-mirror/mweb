@@ -1,7 +1,7 @@
 Here we start stage1, the next step.  The implementation in stage 0
 allows only us to seperate comments from codes.  It's not a big improvement,
-but at least let us get rid of the pain suffering from formatting code, so that
-I can write this stage in a pleasure way like writing a normal article.
+but at least let us get rid of the pain from formatting code, so that
+we can write this stage in a pleasure way like writing a normal article.
 
 We have mentioned the concept of code chunks, like any other objects,
 code chunks can also have name and value.  This stage's object is developing
@@ -10,19 +10,82 @@ names, and let code chunks be able to be refered by their name.
 
 The tangle procedure now has an extra step, we do not extract chunks
 directly from string now, we parse the string first.
-@{code chunks in stage 1@}
+@[code chunks in stage 1@]
 (define (tangle file)
-  (let* ((contents (get-contents file))
-	 (objects (parse-contents contents))
-	 (chunks (extract-code-chunks objects)))
-    (combine chunks)))
+  (combine
+   (extract-code-chunks
+    (parse-contents
+     (get-contents file)))))
 @
 
-Because the grammer will be become more and more complicated from now on,
+Because the grammar will become more and more complicated from now on,
 it's a good idea to build the parsing procedures at this point.
 MIT-scheme contains a useful library for this purpose.
-@{code chunks in stage 1@}
+@[code chunks in stage 1@]
 (load-option '*parser)
+@
+
+As you might guess, the code chunks used in this stage also follow the new
+syntax defined by this stage, but add something new inside code chunks.
+Let's define the elements of MWEB stage1 one by one.
+
+TEXT: the comments is of this type, since we do not have any
+control sequence now, for convenience, we simply define it as this.
+@[code chunks in stage 1@]
+(define-*matcher-macro text
+  `(+ (not-char #\@)))
+@
+
+NAME: the name of code chunks is of this type.
+@[code chunks in stage 1@]
+(define-*matcher-macro name
+  `(seq (char-set char-set:alphanumeric)
+	(? (seq (* (not-char #\@))
+		(char-set char-set:alphanumeric)))))
+
+(define-*matcher-macro spaces
+  `(* #\space))
+@
+
+CODE: the contents of a code chunk.
+@[code chunks in stage 1@]
+(define-*matcher-macro code
+  `(* (alt (not-char #\@)
+	   (seq #\@ (not-char #\newline)))))
+@
+
+Then build the parse processes:
+@[code chunks in stage 1@]
+(define-*parser-macro mweb-stage-1
+  `(* (seq (? explain-text) code-chunk)))
+
+(define-*parser-macro code-chunk
+  `(seq code-chunk-title
+	code-chunk-content
+	code-chunk-end))
+
+(define-*parser-macro code-chunk-title
+  `(seq (noise "@[")
+	(noise spaces)
+	(match name)
+	(noise spaces)
+	(noise "@]")))
+
+(define-*parser-macro code-chunk-content
+  `(match code))
+
+(define-*parser-macro code-chunk-end
+  `(noise "@\n"))
+
+(define-*parser-macro explain-text
+  `(match text))
+@
+
+Test:
+@[code chunks in stage 1@]
+(define buffer (string->parser-buffer (get-contents "stage1.mw")))
+(define parser (*parser mweb-stage-1))
+(define result (parser buffer))
 @
 
 
