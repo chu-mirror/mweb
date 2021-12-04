@@ -15,14 +15,14 @@
 #|
     A code chunk is labeled as:
 
-    @[code chunks in stage 1@]
+    @[stage 1@]
     ...
     @
 |#
 (define (extract-code-chunks contents)
   (let ((search (regsexp-search-string-forward
 		 (compile-regsexp
-		  '(seq "@[code chunks in stage 1@]"
+		  '(seq "@[stage 1@]"
 			(group code (*? (alt (any-char) #\newline)))
 			"@\n" ))
 		 contents)))

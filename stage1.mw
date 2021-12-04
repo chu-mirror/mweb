@@ -10,7 +10,7 @@ names, and let code chunks be able to be refered by their name.
 
 The tangle procedure now has an extra step, we do not extract chunks
 directly from string now, we parse the string first.
-@[code chunks in stage 1@]
+@[stage 1@]
 (define (tangle file)
   (combine
    (extract-code-chunks
@@ -21,7 +21,7 @@ directly from string now, we parse the string first.
 Because the grammar will become more and more complicated from now on,
 it's a good idea to build the parsing procedures at this point.
 MIT-scheme contains a useful library for this purpose.
-@[code chunks in stage 1@]
+@[stage 1@]
 (load-option '*parser)
 @
 
@@ -31,13 +31,13 @@ Let's define the elements of MWEB stage1 one by one.
 
 TEXT: the comments is of this type, since we do not have any
 control sequence now, for convenience, we simply define it as this.
-@[code chunks in stage 1@]
+@[stage 1@]
 (define-*matcher-macro text
   `(+ (not-char #\@)))
 @
 
 NAME: the name of code chunks is of this type.
-@[code chunks in stage 1@]
+@[stage 1@]
 (define-*matcher-macro name
   `(seq (char-set char-set:alphanumeric)
 	(? (seq (* (not-char #\@))
@@ -48,17 +48,23 @@ NAME: the name of code chunks is of this type.
 @
 
 CODE: the contents of a code chunk.
-@[code chunks in stage 1@]
+@[stage 1@]
 (define-*matcher-macro code
   `(* (alt (not-char #\@)
 	   (seq #\@ (not-char #\newline)))))
 @
 
-Then build the parse processes:
-@[code chunks in stage 1@]
+Then build the parse processes, we do not use explaining text now, just ignore them.
+@[stage 1@]
 (define-*parser-macro mweb-stage-1
-  `(* (seq (? explain-text) code-chunk)))
+  `(* (seq (? explain-text)
+	   (encapsulate vector->list code-chunk))))
 
+(define-*parser-macro explain-text
+  `(noise text))
+@
+
+@[stage 1@]
 (define-*parser-macro code-chunk
   `(seq code-chunk-title
 	code-chunk-content
@@ -76,16 +82,48 @@ Then build the parse processes:
 
 (define-*parser-macro code-chunk-end
   `(noise "@\n"))
-
-(define-*parser-macro explain-text
-  `(match text))
 @
 
-Test:
-@[code chunks in stage 1@]
-(define buffer (string->parser-buffer (get-contents "stage1.mw")))
-(define parser (*parser mweb-stage-1))
-(define result (parser buffer))
+@[stage 1@]
+(define (parse-contents contents)
+  (let ((parser (*parser mweb-stage-1)))
+    (vector->list (parser (string->parser-buffer contents)))))
 @
 
+@[stage 1@]
+(define (extract-code-chunks parsed-contents)
+  (let ((hash-table (make-string-hash-table)))
+    (for-each (lambda (chunk)
+		(let* ((title (car chunk))
+		       (contents (cadr chunk))
+		       (contents-extracted
+			(hash-table-ref hash-table title (lambda () ""))))
+		  (hash-table-set! hash-table title
+				  (string-append contents-extracted contents))))
+	      parsed-contents)
+    hash-table))
+@
 
+@[stage 1@]
+(define root-node "stage 2")
+(define-*matcher-macro normal-code
+  `(+ (alt (not-char #\@)
+	   (seq #\@ (not-char #\{)))))
+
+(define-*parser-macro node-contents
+  `(* (alt (match normal-code)
+	   (map tangle-node reference))))
+
+(define-*parser-macro reference
+  `(seq (noise (seq #\@ #\{ spaces))
+	(match name)
+	(noise (seq spaces #\@ #\}))))
+
+(define (combine nodes)
+  (define (tangle-node node)
+    (let ((node-contents (hash-table-ref nodes node (lambda () "")))
+	  (parser (*parser node-contents)))
+      (fold-right string-append "" (vector->list (parser (string->parser-buffer node-contents))))))
+
+  (tangle-node root-node))
+@

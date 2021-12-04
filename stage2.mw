@@ -1,0 +1,8 @@
+@[stage 2@]
+@{defs@}
+@
+
+@[defs@]
+(define (tangle file)
+  '())
+@
