@@ -112,18 +112,26 @@ Then build the parse processes, we do not use explaining text now, just ignore t
 
 (define-*parser-macro node-contents
   `(* (alt (match normal-code)
-	   (map tangle-node reference))))
+	   (map (lambda (node) (tangle-node nodes node)) reference))))
 
 (define-*parser-macro reference
   `(seq (noise (seq #\@ #\{ spaces))
 	(match name)
 	(noise (seq spaces #\@ #\}))))
 
-(define (combine nodes)
-  (define (tangle-node node)
-    (let ((node-contents (hash-table-ref nodes node (lambda () "")))
-	  (parser (*parser node-contents)))
-      (fold-right string-append "" (vector->list (parser (string->parser-buffer node-contents))))))
+(define (tangle-node nodes node)
+  (let ((node-contents (hash-table-ref nodes node (lambda () "")))
+	(parser (*parser node-contents)))
+    (fold-right string-append "" (vector->list (parser (string->parser-buffer node-contents))))))
 
-  (tangle-node root-node))
+(define (combine nodes)
+  (tangle-node nodes root-node))
+@
+
+@[stage 1@]
+(define (tangle-file file node)
+  (tangle-node (extract-code-chunks
+		(parse-contents
+		 (get-contents file)))
+	       node))
 @

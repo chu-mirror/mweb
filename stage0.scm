@@ -88,3 +88,11 @@
 		(cons (cons to (build-next-environment (car from) to))
 		      stage-list))
 	  (write-line (string-append "build stage" to " successfully."))))))
+
+;; for temporary use
+(define (use-stage sufs file node output)
+  (build-stages sufs)
+  (call-with-output-file output
+    (lambda (port)
+      (write-string (eval `(tangle-file ,file ,node) (cdar stage-list))
+		    port))))
