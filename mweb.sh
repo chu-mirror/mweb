@@ -6,5 +6,5 @@ outputpath=$(realpath "$3")
 
 cd ~/src/mweb
 echo "(use-stage '(\"0\" \"1\") \"$srcpath\" \"$node\" \"$outputpath\")" \
-	| scheme --load stage0.scm
+	| scheme --load stage-0.scm
 
