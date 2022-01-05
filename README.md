@@ -2,7 +2,7 @@
 
 This project is migarating to scheme.
 
-There's two building targets planned, but only classic supported now.
+There are two targets planned, but only _classic_ supported now.
 ```
 $ make classic
 ```
