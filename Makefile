@@ -1,8 +1,8 @@
-ALL = mweb
+LIT = stage-1.mw
+BUILD_CMD = echo "" | mit-scheme --no-init-file --load stage-0
 
-all: ${ALL}
-
-mweb: mweb.sh
-	sed -e 's|MWEBPATH|'$$(pwd)'|g' $< > $@
-	chmod +x $@
-
+classic:
+	ln -sf classic.mw mweb.mw
+	${BUILD_CMD}
+clean:
+	rm -rf ${LIT:.mw=.scm} mweb.*

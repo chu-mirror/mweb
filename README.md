@@ -1,18 +1,14 @@
 # MWEB
 
-This project is migarating to scheme.  To build the current version by:
-```
-$ mit-scheme --load boot
-```
-Some stages are available right now, use script _mweb.sh_ to use them.
-```
-# generate final executable script
-$ make
-# then put the result under $PATH
+This project is migarating to scheme.
 
-# you can parse a mweb source file using stage 1 by, for example:
-$ mweb 1 stage-ex.mw defs stage-ex.scm
+There's two building targets planned, but only classic supported now.
 ```
+$ make classic
+```
+
+You can refer _wrapper.sh_ to see how to use MWEB, I'm not ready to
+improve user experience.
 
 ## References
 

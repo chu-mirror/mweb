@@ -1,26 +1,32 @@
-Here we start stage1, the next step.  The implementation in stage 0
-allows only us to seperate comments from codes.  It's not a big improvement,
-but at least let us get rid of the pain from formatting code, so that
-we can write this stage in a pleasure way like writing an essay.
+# Classic Literate Programming
 
-We have mentioned the concept of code chunks, like any other objects,
-code chunks can also consist of name and value.  This stage's object is developing
-a new strategy at combining code chunks.  The new strategy gives code chunks
-names, and let code chunks be able to be refered by their name.  Naming
-code chunks is a little inaccurate, as you could observe in this
-stage, all code chunks have a common name "stage 1", does it mean that
-the code chunk "stage 1" has been defined once by once? No, we regard
-the whole code chunks as an entity.  We have to introduce a new concept here,
-I call it node.  All code chunks with a same name are simply concated one by one
-to form the node of that name.  What we are going to name are nodes rather than code chunks.
-The stage1 has only one node, named "stage 1".
+The stage1's model supports the programming paradigm which I call
+**Classic Literate Programming**.  In **Classic Literate Programming**,
 
-The tangle procedure now has an extra argument, because multiple nodes can be
-defined.  We have to specify the node's name we want to extract from MWEB source file.
-Beside that, I insert a parsing procedure here, because the grammar will become
-more and more complicated from now on, it's a good idea to build the parsing
-procedures at this point.
-@[stage 1@]
+@[mweb@]
+@{grammar@}
+@{tangle@}
+@{weave@}
+@{I/O@}
+@
+
+## I/O
+
+@[I/O@]
+(define file-max-size (expt 2 20))
+(define (get-contents file)
+  (call-with-input-file file
+    (lambda (port)
+      (read-string file-max-size port))))
+(define (put-contents file contents)
+  (call-with-output-file file
+    (lambda (port)
+      (write-string contents port))))
+@
+
+## Grammar
+
+@[mweb@]
 (define (tangle file node)
   ; tangle-node is just another form of tangle, use parsed file
   ; rather than file as argument
@@ -31,7 +37,7 @@ procedures at this point.
 @
 
 MIT-scheme contains a useful library to do parsing.
-@[stage 1@]
+@[mweb@]
 (load-option '*parser)
 @
 
@@ -41,13 +47,13 @@ Let's define the elements of MWEB stage1 one by one.
 
 TEXT: the comments is of this type, since we do not have any
 control sequence now, for convenience, we simply define it as this.
-@[stage 1@]
+@[mweb@]
 (define-*matcher-macro text
   `(+ (not-char #\@)))
 @
 
 NAME: the name of code chunks is of this type.
-@[stage 1@]
+@[mweb@]
 (define-*matcher-macro name
   `(seq (char-set char-set:alphanumeric)
 	(? (seq (* (not-char #\@))
@@ -58,14 +64,14 @@ NAME: the name of code chunks is of this type.
 @
 
 CODE: the contents of a code chunk.
-@[stage 1@]
+@[mweb@]
 (define-*matcher-macro code
   `(* (alt (not-char #\@)
 	   (seq #\@ (not-char #\newline)))))
 @
 
 Then build the parse processes, we do not use explaining text now, just ignore them.
-@[stage 1@]
+@[mweb@]
 (define-*parser-macro mweb-stage-1
   `(* (seq (? explain-text)
 	   (encapsulate vector->list code-chunk))))
@@ -74,7 +80,7 @@ Then build the parse processes, we do not use explaining text now, just ignore t
   `(noise text))
 @
 
-@[stage 1@]
+@[mweb@]
 (define-*parser-macro code-chunk
   `(seq code-chunk-title (noise "\n")
 	code-chunk-content
@@ -94,13 +100,13 @@ Then build the parse processes, we do not use explaining text now, just ignore t
   `(noise "@\n"))
 @
 
-@[stage 1@]
+@[mweb@]
 (define (parse-contents contents)
   (let ((parser (*parser mweb-stage-1)))
     (vector->list (parser (string->parser-buffer contents)))))
 @
 
-@[stage 1@]
+@[mweb@]
 (define (extract-code-chunks parsed-contents)
   (let ((hash-table (make-string-hash-table)))
     (for-each (lambda (chunk)
@@ -114,7 +120,7 @@ Then build the parse processes, we do not use explaining text now, just ignore t
     hash-table))
 @
 
-@[stage 1@]
+@[mweb@]
 (define-*matcher-macro normal-code
   `(+ (alt (not-char #\@)
 	   (seq #\@ (not-char #\{)))))
@@ -132,12 +138,5 @@ Then build the parse processes, we do not use explaining text now, just ignore t
   (let ((node-contents (hash-table-ref nodes node (lambda () "")))
 	(parser (*parser node-contents)))
     (fold-right string-append "" (vector->list (parser (string->parser-buffer node-contents))))))
-@
-
-Build MWEB.
-@[stage 1@]
-(call-with-output-file "mweb.scm"
-  (lambda (port)
-    (write-string (tangle "mweb.mw" "mweb") port)))
 @
 
