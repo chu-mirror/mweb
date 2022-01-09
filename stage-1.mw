@@ -4,18 +4,18 @@ but at least let us get rid of the pain from formatting code, so that
 we can write this stage in a pleasure way like writing an essay.
 
 We have mentioned the concept of code chunks, like any other objects,
-code chunks can also consist of name and value.  This stage's object is developing
+code chunks also consist of name and value.  This stage's object is developing
 a new strategy at combining code chunks.  The new strategy gives code chunks
 names, and let code chunks be able to be refered by their name.  Naming
 code chunks is a little inaccurate, as you could observe in this
 stage, all code chunks have a common name "stage 1", does it mean that
 the code chunk "stage 1" has been defined once by once? No, we regard
-the whole code chunks as an entity.  We have to introduce a new concept here,
+the all code chunks as an entity.  We have to introduce a new concept here,
 I call it node.  All code chunks with a same name are simply concated one by one
 to form the node of that name.  What we are going to name are nodes rather than code chunks.
 The stage1 has only one node, named "stage 1".
 
-The tangle procedure now has an extra argument, because multiple nodes can be
+The tangle procedure now has an extra argument, since multiple nodes can be
 defined.  We have to specify the node's name we want to extract from MWEB source file.
 Beside that, I insert a parsing procedure here, because the grammar will become
 more and more complicated from now on, it's a good idea to build the parsing
@@ -39,32 +39,35 @@ As you might guess, the code chunks used in this stage also follow the new
 syntax defined by this stage, but add something new inside code chunks.
 Let's define the elements of MWEB stage1 one by one.
 
-TEXT: the comments is of this type, since we do not have any
+TEXT: the comments are of this type, since we do not have any
 control sequence now, for convenience, we simply define it as this.
 @[stage 1@]
-(define-*matcher-macro text
-  `(+ (not-char #\@)))
+(define-*matcher-macro text `(+ (not-char #\@)))
 @
 
-NAME: the name of code chunks is of this type.
+NAME: the name of code chunks is of this type, starting with an alphabet
+or number, and ending with an alphabet or a number.  This is my preference,
+formal specification of MWEB will not involve this limitation, but the leading
+and ending blanks will be ignored both here and formal specification.
 @[stage 1@]
 (define-*matcher-macro name
   `(seq (char-set char-set:alphanumeric)
 	(? (seq (* (not-char #\@))
 		(char-set char-set:alphanumeric)))))
 
-(define-*matcher-macro spaces
-  `(* #\space))
+(define-*matcher-macro spaces `(* #\space))
 @
 
-CODE: the contents of a code chunk.
+CODE: the contents of a code chunk, unlike TEXT, "@{" and "@}" are introduced into
+contents of code to reference other code chunks.  So we have a more complicated
+definition.
 @[stage 1@]
 (define-*matcher-macro code
   `(* (alt (not-char #\@)
 	   (seq #\@ (not-char #\newline)))))
 @
 
-Then build the parse processes, we do not use explaining text now, just ignore them.
+Then the parse processes, we do not use explaining text now, just ignore them.
 @[stage 1@]
 (define-*parser-macro mweb-stage-1
   `(* (seq (? explain-text)
@@ -81,11 +84,9 @@ Then build the parse processes, we do not use explaining text now, just ignore t
 	code-chunk-end))
 
 (define-*parser-macro code-chunk-title
-  `(seq (noise "@[")
-	(noise spaces)
+  `(seq (noise "@[") (noise spaces)
 	(match name)
-	(noise spaces)
-	(noise "@]")))
+	(noise spaces) (noise "@]")))
 
 (define-*parser-macro code-chunk-content
   `(match code))
@@ -94,12 +95,17 @@ Then build the parse processes, we do not use explaining text now, just ignore t
   `(noise "@\n"))
 @
 
+I prefer dealing with lists, the result of parse-contents is an association list
+mapping titles to contents.
 @[stage 1@]
 (define (parse-contents contents)
   (let ((parser (*parser mweb-stage-1)))
     (vector->list (parser (string->parser-buffer contents)))))
 @
 
+Even though efficiency is not a main concern in building, hash table is the best choice here,
+both in clarity and in efficiency.  extract-code-chunks concates the code chunks with a same name,
+and saving them in a hash table.
 @[stage 1@]
 (define (extract-code-chunks parsed-contents)
   (let ((hash-table (make-string-hash-table)))
@@ -114,6 +120,9 @@ Then build the parse processes, we do not use explaining text now, just ignore t
     hash-table))
 @
 
+We now need to parse references to other code chunks in code contents.
+This process contains recursive calling of tangle-node.  Tangling a node
+means tangling all nodes it references and concating them in order.
 @[stage 1@]
 (define-*matcher-macro normal-code
   `(+ (alt (not-char #\@)
