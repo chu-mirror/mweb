@@ -1,0 +1,72 @@
+# MWEB(prototype)
+
+The previous work gives an overview of _Literate Programming_, but lacks of
+another critical part of a complete literate programming system.  We will
+fill this blank in this section to build a complete system, and introduce
+_MWEB_'s innovation to _Literate Programming_.
+
+Having a knowledge of how _MWEB_ deal with _.mw_ files at first might help
+understanding later.  _MWEB(prototype)_ is designed to consist of three phases of processing:
+first, preprocessing, synonymous to _C_'s; second, declarative part's parsing; third,
+imperative part's executing.
+
+Preprocessing, as you have met in _C_'s preprocessor, do a similar job,
+in _MWEB(prototype)_, I only add one instruction in this phase,
+```
+	@i file
+```
+to include file, as same as _C_'s _#include_.  This instruction must be put at first of
+a line, all preprocessing instruction should be in this way.  It can be used
+anywhere, to include anything textual, but if you want to include a binary file,
+I wont prevent you.
+
+The following two phases are a little confussing, let me explain why I take
+such an approach.  You might have heard of imperative or declarative
+programming, I use these two words in the same means.  The _stage 0_ and _stage 1_
+only deal with declarative statements, all works they do is parsing _.mw_ file's
+description of code chunks, and do booting next stage by code hardcoded
+into their source code.  I let the imperative hardcoded code exposed to users
+of _MWEB(prototype)_, and do not give any wrapper on them, users must use
+_MIT-Scheme_ to write this part of code.  The reason for this approach is that
+although declarative code is expressive, using it to replace all actions
+that _MWEB_ might take will require a lot of energy in definition of grammar,
+and impose stress on users(they should follow me if I made any changes on specification),
+it's not ideal for both develpment and using of a prototype.  So I keep a few
+declarative statements to express spirit of _MWEB_, and put the remaining
+miscellaneous on the imperative part.
+
+The declarative part's grammar is similar to _stage 0_ and _stage 1_ but with
+some extensions, which will be introduced later.  The imperative part are used as:
+```
+	@(scheme expression)
+```
+A statement like this should be used outside of code chunks for itself regarded
+as a code chunk in parsing.  You can regard it as a normal code chunk, and refer to
+other code chunks in statement as _stage 1_ enabled.
+
+## I/O
+
+We should redesign I/O procedures, because _MWEB(prototype)_  is supposed to be used
+in a lot of situations despite it's a prototype.
+
+## Preprocess
+
+## Weave
+
+What we have built in stage1 is which I call Classic Literate Programming.
+From now on, we are going to attach types to code chunks, not only names.
+And this is the main innovation of MWEB.
+
+We have to introduce new grammar for declaring types.
+```
+	@[ code chunk name @: type @]
+	contents
+	@
+```
+
+We also need to build mechanisms to handle types, 
+@[mweb proto@]
+
+@
+
+## Tangle
