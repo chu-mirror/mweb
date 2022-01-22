@@ -2,7 +2,7 @@
 
 ;; The functionality of stage0: extract code chunks from stage1 and combine them
 (define (tangle file)
-  (combine (extract-code-chunks (get-contents file))))
+  (combine (extract-code-chunks (get-content file))))
 
 ;; The code chunks are just strings now, combine them by concating them one by one
 ;; to build the final program of stage 1.
@@ -17,26 +17,26 @@
     ...
     @
 |#
-(define (extract-code-chunks contents)
+(define (extract-code-chunks content)
   (let ((search (regsexp-search-string-forward
 		 (compile-regsexp
 		  '(seq "@[stage 1@]"
 			(group code (*? (alt (any-char) #\newline)))
 			"@\n" ))
-		 contents)))
+		 content)))
     (if search
 	(let ((chunk (cdr (assoc 'code (cddr search))))
 	      (next-start (cadr search)))
 	  (cons chunk (extract-code-chunks
-		       (string-tail contents next-start))))
+		       (string-tail content next-start))))
 	'())))
 
 ;;; I/O
 
 ;; The I/O operations are simply read in or write out strings in buiding.
-;; Procedure get-contents is shared among stages.
+;; Procedure get-content is shared among stages.
 (define file-max-size (expt 2 20)) ; 1MB
-(define (get-contents file)
+(define (get-content file)
   (call-with-input-file file
     (lambda (port)
       (read-string file-max-size port))))

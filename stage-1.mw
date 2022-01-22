@@ -25,8 +25,8 @@ procedures at this point.
   ; tangle-node is just another form of tangle, use parsed file
   ; rather than file as argument
   (tangle-node (extract-code-chunks
-		(parse-contents
-		 (get-contents file)))
+		(parse-content
+		 (get-content file)))
 	       node))
 @
 
@@ -95,32 +95,32 @@ Then the parse processes, we do not use explaining text now, just ignore them.
   `(noise "@\n"))
 @
 
-I prefer dealing with lists, the result of parse-contents is an association list
+I prefer dealing with lists, the result of parse-content is an association list
 mapping titles to contents.
 @[stage 1@]
-(define (parse-contents contents)
+(define (parse-content content)
   (let ((parser (*parser mweb-stage-1)))
-    (vector->list (parser (string->parser-buffer contents)))))
+    (vector->list (parser (string->parser-buffer content)))))
 @
 
 Even though efficiency is not a main concern in building, hash table is the best choice here,
 both in clarity and in efficiency.  extract-code-chunks concates the code chunks with a same name,
 and saving them in a hash table.
 @[stage 1@]
-(define (extract-code-chunks parsed-contents)
+(define (extract-code-chunks parsed-content)
   (let ((hash-table (make-string-hash-table)))
     (for-each (lambda (chunk)
 		(let* ((title (car chunk))
-		       (contents (cadr chunk))
-		       (contents-extracted
+		       (content (cadr chunk))
+		       (content-extracted
 			(hash-table-ref hash-table title (lambda () ""))))
 		  (hash-table-set! hash-table title
-				  (string-append contents-extracted contents))))
-	      parsed-contents)
+				  (string-append content-extracted content))))
+	      parsed-content)
     hash-table))
 @
 
-We now need to parse references to other code chunks in code contents.
+We now need to parse references to other code chunks in code content.
 This process contains recursive calling of tangle-node.  Tangling a node
 means tangling all nodes it references and concating them in order.
 @[stage 1@]
@@ -128,7 +128,7 @@ means tangling all nodes it references and concating them in order.
   `(+ (alt (not-char #\@)
 	   (seq #\@ (not-char #\{)))))
 
-(define-*parser-macro node-contents
+(define-*parser-macro node-content
   `(* (alt (match normal-code)
 	   (map (lambda (node) (tangle-node nodes node)) reference))))
 
@@ -138,9 +138,9 @@ means tangling all nodes it references and concating them in order.
 	(noise (seq spaces #\@ #\}))))
 
 (define (tangle-node nodes node)
-  (let ((node-contents (hash-table-ref nodes node (lambda () "")))
-	(parser (*parser node-contents)))
-    (fold-right string-append "" (vector->list (parser (string->parser-buffer node-contents))))))
+  (let ((node-content (hash-table-ref nodes node (lambda () "")))
+	(parser (*parser node-content)))
+    (fold-right string-append "" (vector->list (parser (string->parser-buffer node-content))))))
 @
 
 Build MWEB.
