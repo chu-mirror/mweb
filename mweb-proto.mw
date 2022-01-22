@@ -13,7 +13,7 @@ imperative part's executing.
 Preprocessing, as you have met in _C_'s preprocessor, do a similar job,
 in _MWEB(prototype)_, I only add one instruction in this phase,
 ```
-	@i file
+	{at}i file
 ```
 to include file, as same as _C_'s _#include_.  This instruction must be put at first of
 a line, all preprocessing instruction should be in this way.  It can be used
@@ -38,7 +38,7 @@ miscellaneous on the imperative part.
 The declarative part's grammar is similar to _stage 0_ and _stage 1_ but with
 some extensions, which will be introduced later.  The imperative part are used as:
 ```
-	@(scheme expression)
+	{at}(scheme expression)
 ```
 A statement like this should be used outside of code chunks for itself regarded
 as a code chunk in parsing.  You can regard it as a normal code chunk, and refer to
@@ -46,8 +46,44 @@ other code chunks in statement as _stage 1_ enabled.
 
 ## I/O
 
-We should redesign I/O procedures, because _MWEB(prototype)_  is supposed to be used
+We should redesign I/O procedures, because _MWEB(prototype)_ is supposed to be used
 in a lot of situations despite it's a prototype.
+
+We used to read in whole contents of a file as a string, but in order to do preprocessing,
+a new input procedure is used.
+@[mweb prototype@]
+(define (file->lines file)
+  (call-with-input-file file
+    (lambda (port)
+      @{lines read from port@})))
+
+@
+
+@[lines read from port@]
+(letrec
+  ((get-lines (lambda ()
+	        (let ((line (read-line port)))
+	          (if (eof-object? line)
+		      '()
+		      (cons line (get-lines)))))))
+  (get-lines))
+@
+
+We also preserve the meaning of _content_ in _stage 0_ and _stage 1_.
+@[mweb prototype@]
+(define (lines->content lines)
+  (fold-right string-append
+              ""
+              (map (lambda (line) (string-append line "\n"))
+                   lines)))
+
+(define (file->content file)
+  (lines->content (file->lines file)))
+@
+
+Output is simpler.
+@[mweb prototype@]
+@
 
 ## Preprocess
 
@@ -59,13 +95,13 @@ And this is the main innovation of MWEB.
 
 We have to introduce new grammar for declaring types.
 ```
-	@[ code chunk name @: type @]
+	{at}[ code chunk name {at}: type {at}]
 	contents
-	@
+	{at}
 ```
 
 We also need to build mechanisms to handle types, 
-@[mweb proto@]
+@[mweb prototype@]
 
 @
 
