@@ -54,10 +54,11 @@ control sequence now, for convenience, we simply define it as this.
 
 NAME: the name of code chunks is of this type.
 @[mweb@]
+(define char-set:non-whitespace (char-set-invert char-set:whitespace))
 (define-*matcher-macro name
-  `(seq (char-set char-set:alphanumeric)
+  `(seq (char-set char-set:non-whitespace)
 	(? (seq (* (not-char #\@))
-		(char-set char-set:alphanumeric)))))
+		(char-set char-set:non-whitespace)))))
 
 (define-*matcher-macro spaces
   `(* #\space))

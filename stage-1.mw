@@ -50,10 +50,11 @@ or number, and ending with an alphabet or a number.  This is my preference,
 formal specification of MWEB will not involve this limitation, but the leading
 and ending blanks will be ignored both here and formal specification.
 @[stage 1@]
+(define char-set:non-whitespace (char-set-invert char-set:whitespace))
 (define-*matcher-macro name
-  `(seq (char-set char-set:alphanumeric)
+  `(seq (char-set char-set:non-whitespace)
 	(? (seq (* (not-char #\@))
-		(char-set char-set:alphanumeric)))))
+		(char-set char-set:non-whitespace)))))
 
 (define-*matcher-macro spaces `(* #\space))
 @
