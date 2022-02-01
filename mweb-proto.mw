@@ -30,13 +30,13 @@ of _MWEB(prototype)_, and do not give any wrapper on them, users must use
 _MIT-Scheme_ to write this part of code.  The reason for this approach is that
 although declarative code is expressive, using it to replace all actions
 that _MWEB_ might take will require a lot of energy in definition of grammar,
-and impose stress on users(they should follow me if I made any changes on specification),
+and impose stress on users(they should follow me if I made any change on specification),
 it's not ideal for both develpment and using of a prototype.  So I keep a few
-declarative statements to express spirit of _MWEB_, and put the remaining
+declarative statements to express the spirit of _MWEB_, and put the remaining
 miscellaneous on the imperative part.
 
 The declarative part's grammar is similar to _stage 0_ and _stage 1_ but with
-some extensions, which will be introduced later.  The imperative part are used as:
+some extensions, which will be introduced later.  The imperative parts are expressed as:
 ```
 	{at}(scheme expression)
 ```
@@ -56,7 +56,6 @@ a new input procedure is used.
   (call-with-input-file file
     (lambda (port)
       @{lines read from port@})))
-
 @
 
 @[lines read from port@]
