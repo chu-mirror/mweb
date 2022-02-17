@@ -1,7 +1,7 @@
 LIT = stage-1.mw
 BUILD_CMD = echo "" | mit-scheme --no-init-file --load stage-0
 
-mweb-prototype.scm:
+proto:
 	mweb mweb-proto.mw "mweb prototype" mweb-proto.scm
 
 classic:

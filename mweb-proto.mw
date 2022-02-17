@@ -13,7 +13,7 @@ declarative part's parsing; third, imperative part's executing.
 Preprocessing, as you have met in _C_'s preprocessor, do a similar job,
 in _MWEB(prototype)_, I only add one instruction in this phase,
 ```
-	{at}i file
+	{at}i file [file1] [file2] ...
 ```
 to include file, as same as _C_'s _#include_.  This instruction must be put at first of
 a line, all preprocessing instruction should be in this way.  It can be used
@@ -44,6 +44,15 @@ A statement like this should be used outside of code chunks for itself regarded
 as a code chunk in parsing.  You can regard it as a normal code chunk, and refer to
 other code chunks as _stage 1_ enabled.
 
+The whole program is divided to five parts.
+@[mweb prototype@]
+@{dependencies@}
+@{macros@}
+@{procedures@}
+@{constants@}
+@{variables@}
+@
+
 ## I/O
 
 We should redesign I/O procedures, because _MWEB(prototype)_ is supposed to be used
@@ -51,11 +60,24 @@ in a lot of situations despite it's a prototype.
 
 We used to read in whole contents of a file as a string, but in order to do preprocessing,
 a new input procedure is used.
-@[mweb prototype@]
+@[procedures@]
 (define (file->lines file)
-  (call-with-input-file file
-    (lambda (port)
-      @{lines read from _port_@})))
+  (let ((number 0))
+    (map (lambda (l) (set! number (+ number 1)) (list l number file))
+         @{lines read from _file_@})))
+@
+
+Every line is labeled with line number and file name.
+@[procedures@]
+(define (line-content line) (car line))
+(define (line-number line) (cadr line))
+(define (line-file line) (caddr line))
+@
+
+@[lines read from _file_@]
+(call-with-input-file file
+  (lambda (port)
+    @{lines read from _port_@}))
 @
 
 @[lines read from _port_@]
@@ -68,27 +90,83 @@ a new input procedure is used.
   (get-lines))
 @
 
-We also preserve the meaning of _content_ in _stage 0_ and _stage 1_.
-@[mweb prototype@]
-(define (lines->content lines)
-  (fold-right string-append
-              ""
-              (map (lambda (line) (string-append line "\n"))
-                   lines)))
-
-(define (file->content file)
-  (lines->content (file->lines file)))
+Output is simpler.
+@[procedures@]
 @
 
-Output is simpler.
-@[mweb prototype@]
+## Parse
+
+Like _stage 1_, we use _MIT scheme_'s parsing library.
+@[dependencies@]
+(load-option '*parser)
+@
+
+But unlike _stage 1_, _MWEB(prototype)_ parse file line by line for
+a better user experience.
+@[procedures@]
+(define (line->buffer line)
+  (string->parser-buffer (line-content line)))
+@
+
+Some general matcher and parser macros are defined here.
+@[constants@]
+(define char-set:non-whitespace (char-set-invert char-set:whitespace))
+@
+
+@[macros@]
+(define-*matcher-macro space '(char-set char-set:whitespace))
+(define-*matcher-macro spaces '(+ space))
 @
 
 ## Preprocess
 
+We have only one preprocessing by now, including.
+
+First, define its grammar.
+
+There are three basic elements:
+@[macros@]
+(define-*matcher-macro include-directive '(seq #\@ #\i))
+(define-*matcher-macro file-name '(+ (char-set char-set:non-whitespace)))
+(define-*matcher-macro file-name-quoted '(+ (not-char #\")))
+@
+The include directive accepts file names containing blanks, but you should quote them.
+
+We parse an include directive to get a list of file names to include.
+@[macros@]
+(define-*parser-macro parse-include-directive
+  '(seq (noise include-directive)
+        (encapsulate vector->list @{parsing file names@})))
+@
+
+The directive can accept zero file names.
+@[parsing file names@]
+(* (seq (noise spaces)
+	(alt (match file-name)
+	     (seq (noise #\") (match file-name-quoted) (noise #\")))))
+@
+
+@[procedures@]
+(define (preprocess lines)
+  (let ((matcher (*matcher include-directive))
+        (parser (*parser parse-include-directive)))
+    (fold-right append '()
+      (map @{parse and execute directives@} lines))))
+@
+
+@[parse and execute directives@]
+(lambda (l)
+  (let* ((buffer (line->buffer l))
+         (result (parser buffer)))
+    (if result
+        (fold-right append '()
+	  (map file->lines (vector-ref result 0)))
+	(list l))))
+@
+
 ## Weave
 
-What we have built in stage1 is which I call Classic Literate Programming.
+What we have built in _stage 1_ is which I call Classic Literate Programming.
 From now on, we are going to attach types to code chunks, not only names.
 And this is the main innovation of MWEB.
 
@@ -100,8 +178,9 @@ We have to introduce new grammar for declaring types.
 ```
 
 We also need to build mechanisms to handle types, 
-@[mweb prototype@]
+@[procedures@]
 
 @
 
 ## Tangle
+
