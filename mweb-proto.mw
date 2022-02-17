@@ -109,8 +109,10 @@ a better user experience.
 @
 
 Some general matcher and parser macros are defined here.
+
 @[constants@]
 (define char-set:non-whitespace (char-set-invert char-set:whitespace))
+(define char-set:normal-file-name (char-set-difference char-set:non-whitespace (char-set #\")))
 @
 
 @[macros@]
@@ -127,7 +129,7 @@ First, define its grammar.
 There are three basic elements:
 @[macros@]
 (define-*matcher-macro include-directive '(seq #\@ #\i))
-(define-*matcher-macro file-name '(+ (char-set char-set:non-whitespace)))
+(define-*matcher-macro file-name '(+ (char-set char-set:normal-file-name)))
 (define-*matcher-macro file-name-quoted '(+ (not-char #\")))
 @
 The include directive accepts file names containing blanks, but you should quote them.
