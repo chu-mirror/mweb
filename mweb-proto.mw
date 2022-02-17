@@ -1,14 +1,14 @@
 # MWEB(prototype)
 
 The previous work gives an overview of _Literate Programming_, but lacks of
-another critical part of a complete literate programming system.  We will
+another critical part for a complete literate programming system.  We will
 fill this blank in this section to build a complete system, and introduce
 _MWEB_'s innovation to _Literate Programming_.
 
 Having a knowledge of how _MWEB_ deal with _.mw_ files at first might help
-understanding later.  _MWEB(prototype)_ is designed to consist of three phases of processing:
-first, preprocessing, synonymous to _C_'s; second, declarative part's parsing; third,
-imperative part's executing.
+understanding following contents.  _MWEB(prototype)_ is designed to consist of
+three phases of processing: first, preprocessing, synonymous to _C_'s; second,
+declarative part's parsing; third, imperative part's executing.
 
 Preprocessing, as you have met in _C_'s preprocessor, do a similar job,
 in _MWEB(prototype)_, I only add one instruction in this phase,
@@ -42,7 +42,7 @@ some extensions, which will be introduced later.  The imperative parts are expre
 ```
 A statement like this should be used outside of code chunks for itself regarded
 as a code chunk in parsing.  You can regard it as a normal code chunk, and refer to
-other code chunks in statement as _stage 1_ enabled.
+other code chunks as _stage 1_ enabled.
 
 ## I/O
 
@@ -55,10 +55,10 @@ a new input procedure is used.
 (define (file->lines file)
   (call-with-input-file file
     (lambda (port)
-      @{lines read from port@})))
+      @{lines read from _port_@})))
 @
 
-@[lines read from port@]
+@[lines read from _port_@]
 (letrec
   ((get-lines (lambda ()
 	        (let ((line (read-line port)))
