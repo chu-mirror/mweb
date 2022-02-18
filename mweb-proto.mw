@@ -90,8 +90,10 @@ Every line is labeled with line number and file name.
   (get-lines))
 @
 
-Output is simpler.
-@[procedures@]
+Output consists of two parts.
+
+@[dependencies@]
+(load-option 'format)
 @
 
 ## Parse
@@ -101,8 +103,7 @@ Like _stage 1_, we use _MIT scheme_'s parsing library.
 (load-option '*parser)
 @
 
-But unlike _stage 1_, _MWEB(prototype)_ parse file line by line for
-a better user experience.
+But unlike _stage 1_, _MWEB(prototype)_ parse file line by line for a better user experience.
 @[procedures@]
 (define (line->buffer line)
   (string->parser-buffer (line-content line)))
@@ -112,12 +113,13 @@ Some general matcher and parser macros are defined here.
 
 @[constants@]
 (define char-set:non-whitespace (char-set-invert char-set:whitespace))
-(define char-set:normal-file-name (char-set-difference char-set:non-whitespace (char-set #\")))
+(define char-set:all (char-set-union char-set:non-whitespace char-set:whitespace))
 @
 
 @[macros@]
 (define-*matcher-macro space '(char-set char-set:whitespace))
 (define-*matcher-macro spaces '(+ space))
+(define-*parser-macro skip-spaces '(noise (alt (seq) (spaces))))
 @
 
 ## Preprocess
@@ -125,6 +127,11 @@ Some general matcher and parser macros are defined here.
 We have only one preprocessing by now, including.
 
 First, define its grammar.
+
+File names can contain any character other than _"_.
+@[constants@]
+(define char-set:normal-file-name (char-set-difference char-set:non-whitespace (char-set #\")))
+@
 
 There are three basic elements:
 @[macros@]
@@ -166,23 +173,176 @@ The directive can accept zero file names.
 	(list l))))
 @
 
-## Weave
+## Declarative
 
 What we have built in _stage 1_ is which I call Classic Literate Programming.
 From now on, we are going to attach types to code chunks, not only names.
 And this is the main innovation of MWEB.
 
-We have to introduce new grammar for declaring types.
+Besides this, I also add cross-referencing to _MWEB(prototype)_.
+
+We have to introduce new grammar for type declaration.
 ```
 	{at}[ code chunk name {at}: type {at}]
 	contents
+	{at}d identifier1 identifier2 ...
+	{at}r identifier1 identifier2 ...
 	{at}
 ```
 
-We also need to build mechanisms to handle types, 
-@[procedures@]
+{at}d means _define_, {at}r means _reference_.  All three ways can be used to
+end a code chunk, but {at} can not be used before {at}d or {at}r.  The order of
+{at}d and {at}r doesn't matter.
 
+Code chunk name and type name are same.
+@[constants@]
+(define char-set:name (char-set-invert (char-set #\@)))
 @
 
-## Tangle
+@[macros@]
+(define-*matcher-macro code-chunk-name
+  '(seq (char-set char-set:non-whitespace)
+        (? (seq (* (char-set char-set:name))
+	        (char-set char-set:non-whitespace)))))
+(define-*matcher-macro code-chunk-name-start-directive '(seq #\@ #\[))
+(define-*matcher-macro code-chunk-name-end-directive '(seq #\@ #\]))
+(define-*matcher-macro code-chunk-name-type-seperate-directive '(seq #\@ #\:))
+@
+
+Identifier names are like file names in preprocessing, but without quoted form.
+@[constants@]
+(define char-set:identifier-name char-set:non-whitespace)
+@
+
+@[macros@]
+(define-*matcher-macro identifier-name '(+ (char-set char-set:identifier-name)))
+(define-*matcher-macro define-directive '(seq #\@ #\d))
+(define-*matcher-macro reference-directive '(seq #\@ #\r))
+@
+
+Having introduced new grammar, let's look at content to be parsed in a whole.
+A complete _MWEB_ source file contains, as we have seen in _stage 1_, explanatory text
+and code chunks.  The difference is, we use a line by line parsing strategy now,
+so we can extract useful imformation in a more narrow range.
+
+Any line not containing {at} at head can be accept as explanatory text.
+@[macros@]
+(define-*parser-macro parse-essay-line
+  '(encapsulate (lambda (v) (cons 'essay-line (vector->list v)))
+    (match (alt (seq (not-char #\@) (* (char-set char-set:all)))
+                (end-of-input)))))
+@
+
+@[macros@]
+(define-*parser-macro parse-code-chunk-start-line
+  '(encapsulate (lambda (v) (cons 'start-line (vector->list v)))
+    (seq (noise code-chunk-name-start-directive)
+	 skip-spaces
+	 (match code-chunk-name)
+	 skip-spaces
+	 (? @{parsing type name@})
+	 (noise code-chunk-name-end-directive))))
+@
+
+@[parsing type name@]
+(seq (noise code-chunk-name-type-seperate-directive)
+     skip-spaces
+     (match code-chunk-name)
+     skip-spaces)
+@
+
+@[macros@]
+(define-*parser-macro parse-code-chunk-content-line
+  '(encapsulate (lambda (v) (cons 'content-line (vector->list v)))
+    (match (alt (seq (not-char #\@) (* (char-set char-set:all)))
+	        (seq #\@ (char-set char-set:not-end) (* (char-set char-set:all)))
+		(end-of-input)))))
+@
+
+@[constants@]
+(define char-set:not-end (char-set-difference char-set:non-whitespace (char-set #\d #\r)))
+@
+
+@[macros@]
+(define-*parser-macro parse-code-chunk-end-line
+  '(encapsulate (lambda (v) (cons 'end-line (vector->list v)))
+    (alt @{parsing definition line@}
+         @{parsing reference line@}
+	 @{parsing end line@})))
+@
+
+@[parsing definition line@]
+(encapsulate (lambda (v) (cons 'definitions (vector->list v)))
+  (seq (noise define-directive)
+       (* (seq (noise spaces) (match identifier-name)))))
+@
+
+@[parsing reference line@]
+(encapsulate (lambda (v) (cons 'references (vector->list v)))
+  (seq (noise reference-directive)
+       (* (seq (noise spaces) (match identifier-name)))))
+@
+
+@[parsing end line@]
+(encapsulate (lambda (v) '(end))
+  (seq (noise #\@) skip-spaces (match (end-of-input))))
+@
+
+@[procedures@]
+(define (parse-lines lines)
+  (letrec ((context 'essay)
+           (parse-line @{parse a line according to context@}))
+    (map parse-line lines)))
+@
+
+@[parse a line according to context@]
+(lambda (l)
+  (let ((buffer (line->buffer l)))
+    (case context
+      ((essay) @{parse buffer in essay context@})
+      ((code-start) @{parse buffer in code-start context@})
+      ((code-content) @{parse buffer in code-content context@})
+      ((code-end) @{parse buffer in code-end context@})
+      (else (error "Some Error")))))
+@
+
+@[parse buffer in essay context@]
+(let* ((parser (*parser parse-essay-line))
+       (result (parser buffer)))
+  (if result
+      (vector-ref result 0)
+      (begin
+        (set! context 'code-start)
+	(parse-line l))))
+@
+
+@[parse buffer in code-start context@]
+(let* ((parser (*parser parse-code-chunk-start-line))
+       (result (parser buffer)))
+  (if result
+      (begin
+	(set! context 'code-content)
+        (vector-ref result 0))
+      (error "Some Error")))
+@
+
+@[parse buffer in code-content context@]
+(let* ((parser (*parser parse-code-chunk-content-line))
+       (result (parser buffer)))
+  (if result
+      (vector-ref result 0)
+      (begin
+        (set! context 'code-end)
+	(parse-line l))))
+@
+
+@[parse buffer in code-end context@]
+(let* ((parser (*parser parse-code-chunk-end-line))
+       (result (parser buffer)))
+  (if result
+      (vector-ref result 0)
+      (begin
+        (set! context 'essay)
+	(parse-line l))))
+@
 
