@@ -38,11 +38,9 @@ miscellaneous on the imperative part.
 The declarative part's grammar is similar to _stage 0_ and _stage 1_ but with
 some extensions, which will be introduced later.  The imperative parts are expressed as:
 ```
-	{at}(scheme expression)
+	{at}e{at}[ code chunk name {at}]
 ```
-A statement like this should be used outside of code chunks for itself regarded
-as a code chunk in parsing.  You can regard it as a normal code chunk, and refer to
-other code chunks as _stage 1_ enabled.
+A directive of this type will load and execute the corresponding _MIT Scheme_ code.
 
 The whole program is divided to five parts.
 @[mweb prototype@]
@@ -292,8 +290,23 @@ Any line not containing {at} at head can be accept as explanatory text.
 (define (parse-lines lines)
   (letrec ((context 'essay)
            (parse-line @{parse a line according to context@}))
-    (map parse-line lines)))
+    (map @{attach parsed information@} lines)))
 @
+
+@[attach parsed information@]
+(lambda (l) (cons (parse-line l) l))
+@
+
+@[procedures@]
+(define (parsed-line-info pl) (car pl))
+(define (parsed-line-origin pl) (cdr pl))
+(define (info-type info) (car info))
+(define (info-value info) (cdr info))
+(define (parsed-line-type pl) (info-type (parsed-line-info pl)))
+
+(define (is-essay-line? pl) (eq? (parsed-line-type pl) 'essay-line))
+@
+
 
 @[parse a line according to context@]
 (lambda (l)
@@ -344,5 +357,22 @@ Any line not containing {at} at head can be accept as explanatory text.
       (begin
         (set! context 'essay)
 	(parse-line l))))
+@
+
+@[procedures@]
+(define (gather parsed-lines)
+  (let ((head-attached
+          (reverse (map reverse
+		        (fold @{add new line to gathered@} '((((essay-line start)))) parsed-lines)))))
+    (cons (cdr (car head-attached)) (cdr head-attached))))
+@
+
+@[add new line to gathered@]
+(lambda (parsed-line gathered)
+  (let ((p1 (is-essay-line? parsed-line))
+        (p2 (is-essay-line? (caar gathered))))
+    (if (or (and p1 p2) (and (not p1) (not p2)))
+        (cons (cons parsed-line (car gathered)) (cdr gathered))
+        (cons (list parsed-line) gathered))))
 @
 
