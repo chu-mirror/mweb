@@ -297,6 +297,7 @@ Any line not containing {at} at head can be accept as explanatory text.
 (lambda (l) (cons (parse-line l) l))
 @
 
+We introduced new data type above.
 @[procedures@]
 (define (parsed-line-info pl) (car pl))
 (define (parsed-line-origin pl) (cdr pl))
@@ -305,6 +306,19 @@ Any line not containing {at} at head can be accept as explanatory text.
 (define (parsed-line-type pl) (info-type (parsed-line-info pl)))
 
 (define (is-essay-line? pl) (eq? (parsed-line-type pl) 'essay-line))
+@
+
+Another class of procedures of same kind.
+@[procedures@]
+(define (start-line-name parsed-line) (car (info-value (parsed-line-info parsed-line))))
+(define (start-line-type parsed-line)
+  (let ((value (info-value (parsed-line-info parsed-line))))
+    (if (cdr value) (cadr value) '())))
+
+(define (end-line-type parsed-line)
+  (car (info-value (parsed-line-info parsed-line))))
+(define (end-line-identifiers parsed-line)
+  (cdr (info-value (parsed-line-info parsed-line))))
 @
 
 
@@ -376,3 +390,42 @@ Any line not containing {at} at head can be accept as explanatory text.
         (cons (list parsed-line) gathered))))
 @
 
+@[procedures@]
+(define (parsed-lines-type parsed-lines)
+  (case (parsed-line-type (car parsed-lines))
+    ((essay-line) 'essay)
+    ((start-line) 'code)
+    (else (error "Some Error"))))
+@
+
+@[procedures@]
+(define (parsed-lines-content parsed-lines)
+  (fold-right string-append ""
+    (map (lambda (pl) (string-append (line-content (parsed-line-origin pl)) "\n")) parsed-lines)))
+
+(define essay-content parsed-lines-content)
+
+(define (code-chunk-type code-chunk) (start-line-type (car code-chunk)))
+(define (code-chunk-name code-chunk) (start-line-name (car code-chunk)))
+(define code-chunk-content parsed-lines-content)
+(define (code-chunk-definitions code-chunk)
+  (fold @{gather definitions@} '(() ()) code-chunk))
+(define (code-chunk-references code-chunk)
+  (fold @{gather references@} '(() ()) code-chunk))
+@
+
+@[gather definitions@]
+(lambda (parsed-line gathered)
+  (if (and (eq? (parsed-line-type parsed-line) 'end-line)
+           (eq? (end-line-type parsed-line) 'definitions))
+      (append gathered (end-line-identifiers parsed-line))
+      gathered))
+@
+
+@[gather references@]
+(lambda (parsed-line gathered)
+  (if (and (eq? (parsed-line-type parsed-line) 'end-line)
+           (eq? (end-line-type parsed-line) 'references))
+      (append gathered (end-line-identifiers parsed-line))
+      gathered))
+@
