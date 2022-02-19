@@ -41,7 +41,7 @@ Let's define the elements of MWEB stage1 one by one.
 
 TEXT: the comments are of this type.
 @[stage 1@]
-(define-*matcher-macro text `(+ (alt (not-char #\@) (seq (not-char #\newline) #\@))))
+(define-*matcher-macro text `(+ (alt "@@" (not-char #\@))))
 @
 
 NAME: the name of code chunks is of this type, starting with an alphabet
