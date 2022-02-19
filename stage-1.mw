@@ -39,10 +39,9 @@ As you might guess, the code chunks used in this stage also follow the new
 syntax defined by this stage, but add something new inside code chunks.
 Let's define the elements of MWEB stage1 one by one.
 
-TEXT: the comments are of this type, since we do not have any
-control sequence now, for convenience, we simply define it as this.
+TEXT: the comments are of this type.
 @[stage 1@]
-(define-*matcher-macro text `(+ (not-char #\@)))
+(define-*matcher-macro text `(+ (alt (not-char #\@) (seq (not-char #\newline) #\@))))
 @
 
 NAME: the name of code chunks is of this type, starting with an alphabet
