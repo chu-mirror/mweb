@@ -143,10 +143,17 @@ means tangling all nodes it references and concating them in order.
     (fold-right string-append "" (vector->list (parser (string->parser-buffer node-content))))))
 @
 
-Build MWEB.
+Build MWEB(prototype).
 @[stage 1@]
-(call-with-output-file "mweb.scm"
+(call-with-output-file "mweb-proto.scm"
   (lambda (port)
-    (write-string (tangle "mweb.mw" "mweb") port)))
+    (write-string (tangle "mweb-proto.mw" "mweb prototype") port)))
+@
+
+Script wrapper of MWEB(prototype).
+@[stage 1@]
+(call-with-output-file "mweb-proto"
+  (lambda (port)
+    (write-string (tangle "wrapper.mw" "wrapper of mweb-proto") port)))
 @
 

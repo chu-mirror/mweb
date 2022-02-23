@@ -1,14 +1,10 @@
 # MWEB
 
-This project is migarating to scheme.
+There are two versions planned, but only one available now.
 
-There are two targets planned, but only _classic_ supported now.
 ```
-$ make classic
+$ make proto
 ```
-
-You can refer _wrapper.sh_ to see how to use MWEB, I'm not ready to
-improve user experience.
 
 ## References
 

@@ -1,9 +1,0 @@
-@{specify the name@}=
-m4 @(program info@) @< > @>
-@
-
-@{C program @: specify the name@}=
-cp @< @<.c
-cc -o @> @<.c
-cp @> ../PROG
-@

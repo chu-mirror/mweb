@@ -24,7 +24,7 @@ The following two phases are a little confussing, let me explain why I take
 such an approach.  You might have heard of imperative or declarative
 programming, I use these two words in the same means.  The _stage 0_ and _stage 1_
 only deal with declarative statements, all works they do is parsing _.mw_ file's
-description of code chunks, and do booting next stage by code hardcoded
+description of code chunks, and do boot next stage by code hardcoded
 into their source code.  I let the imperative hardcoded code exposed to users
 of _MWEB(prototype)_, and do not give any wrapper on them, users must use
 _MIT-Scheme_ to write this part of code.  The reason for this approach is that
@@ -53,7 +53,7 @@ The whole program is divided to several parts.
 We should redesign I/O procedures, because _MWEB(prototype)_ is supposed to be used
 in a lot of situations despite it's a prototype.
 
-We used to read in whole contents of a file as a string, but in order to do preprocessing,
+We used to read in whole contents of a file as a string, but in order to do preprocess,
 a new input procedure is used.
 @[procedures@]
 (define (file->lines file)
@@ -448,19 +448,18 @@ Another class of procedures of same kind.
 
 (define (code-chunk-type code-chunk) (start-line-type (car code-chunk)))
 (define (code-chunk-name code-chunk) (start-line-name (car code-chunk)))
-(define (code-chunk-contents code-chunk)
+(define (code-chunk-content code-chunk)
   (parsed-lines-content
     (filter (lambda (pl) (eq? (parsed-line-type pl) 'content-line)) code-chunk)))
 (define (code-chunk-definitions code-chunk)
-  (fold @{gather definitions@} '(() ()) code-chunk))
+  (fold @{gather definitions@} '() code-chunk))
 @
 
 @[gather definitions@]
 (lambda (parsed-line gathered)
   (if (and (eq? (parsed-line-type parsed-line) 'end-line)
            (eq? (end-line-type parsed-line) 'definitions))
-      (append gathered (end-line-identifiers parsed-line))
-      gathered))
+      (append gathered (end-line-identifiers parsed-line))))
 @
 
 End this section with a procedure combining all these stuffs.
@@ -530,17 +529,9 @@ and load the corresponding code to it.
 (list @{values of bindings for env-exec@})
 @
 
-The first two bindings:
-@[names of bindings for env-exec@]
-nodes sections 
-@
-@[values of bindings for env-exec@]
-nodes parsed
-@
-
 ### Tangle
 
-Here we met a trouble, we should load _exec_ first to have a knowledage of types to do tangling,
+Here we met a trouble, we should load _exec_ first to have a knowledage of types to do tangle,
 but to load _exec_, we should tangle it first.  I solve it by giving a definition to "plain text" type,
 so _exec_ should be written using "plain text" only.
 
@@ -636,10 +627,8 @@ special to do this, I specify a default behaviour for it.
 
 @[procedures@]
 (define (accept ref type)
-  (let ((method (hash-table-ref identities type)))
-    (if method
-        (method ref)
-	(file->content ref))))
+  (let ((method (hash-table-ref identities type (lambda () file->content))))
+    (method ref)))
 @
 
 @[procedures@]
@@ -725,7 +714,7 @@ Now, let's continue.
 
 @[procedures@]
 (define (tangle-chunk chunk nodes)
-  (let* ((content (code-chunk-contents chunk))
+  (let* ((content (code-chunk-content chunk))
          (parsed (vector-ref ((*parser parse-code-chunk) (string->parser-buffer content)) 0)))
     (content->reference
       (fold-right string-append ""
@@ -750,7 +739,88 @@ Now, let's continue.
         (code-chunk-type chunk))
 @
 
+Sometimes, we also need extra _accept_ process on references, for example, gcc expect _.c_
+suffix on C source code file.
+@[variables@]
+(define representations (make-string-hash-table))
+@
+
+@[procedures@]
+(define (accept-ref ref type)
+  (let ((method (hash-table-ref representations type (lambda () (lambda (x) x)))))
+    (method ref)))
+@
+
+@[procedures@]
+(define (set-representation! type method)
+  (hash-table-set! representations type method))
+@
+
+@[initialization@]
+(set-representation! "plain text" (lambda (ref) ref))
+@
+
 @[get reference of node and convert it to type@]
-(convert-to (tangle-node node nodes) (node 'type) type)
+(accept-ref (convert-to (tangle-node node nodes) (node 'type) type))
+@
+
+### Weave
+
+_weave_ in _MWEB(prototype)_ is not special at all, users have access to all parsed information,
+and can write _weave_ themselves.  So the major part of _weave_ will be put in User Space.
+What I will do in this section is giving a pretty wrapper on these information.
+
+@[procedures@]
+(define (make-section parsed-lines)
+  (let ((type (parsed-lines-type parsed-lines)))
+    (case type
+      ((code) (make-code-section parsed-lines))
+      ((essay) (make-essay-section parsed-lines)))))
+
+(define (make-code-section parsed-lines)
+  (let ((type 'code)
+	(code-name (code-chunk-name parsed-lines))
+	(code-type (code-chunk-type parsed-lines))
+        (code-content (code-chunk-content parsed-lines))
+	(definitions (code-chunk-definitions parsed-lines)))
+    (lambda (msg . args)
+      (case msg
+	((type) type)
+        ((code-name) code-name)
+	((code-type) code-type)
+	((code-content) code-content)
+	((definitions) definitions)))))
+
+(define (make-essay-section parsed-lines)
+  (let ((type 'essay)
+        (content (essay-content parsed-lines)))
+    (lambda (msg . args)
+      (case msg
+	((type) type)
+        ((content) content)))))
+@
+
+## User Space
+
+This section defines _exec_'s execution environment.  Although _MWEB(prototype)_'s users
+are supposed to read source code of _MWEB(prototype)_ to have an overall knowledge
+of whole system, there's no need to expose all identifiers defined above.
+
+First, we need something to put hands on.
+@[names of bindings for env-exec@]
+mweb-nodes mweb-sections
+@
+
+@[values of bindings for env-exec@]
+nodes (map make-section parsed)
+@
+
+And the core of _MWEB_, type system.
+@[names of bindings for env-exec@]
+mweb-new-relation mweb-new-identity, mweb-new-representation
+@
+
+@[values of binding for env-exec@]
+set-relation! set-identity! set-representation!
 @
 
