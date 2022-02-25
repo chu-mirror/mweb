@@ -1,4 +1,43 @@
+Some functionality like searching files going to be included, although important,
+I do not implement them in kernel of _MWEB(prototype)_, for the sake of understandability
+of source code.
 
+These stuffs concerning about user experience can be separated to a wrapper, like the one here.
+
+The major function of this wrapper is building a tuned environment for _MWEB(prototype)_'s execution.
 @[wrapper of mweb-proto@]
+#!/bin/sh
+
+@{handle arguments@}
+@{build environment@}
+
+echo "(mweb \"$file\" \"$exec\")" | mit-scheme --no-init-file --load mweb-proto.scm 
+@
+
+@[handle arguments@]
+if [ $# -lt 2 ]; then
+	echo "usage: $0 node exec [include-directory]..."
+	exit 1
+fi
+
+file=$1
+exec=$2
+shift; shift
+
+include="$@"
+
+if [ -z "$include" ]; then
+	include="$HOME/.mweb-lib"
+fi
+@
+
+@[build environment@]
+rm -rf mweb-workspace
+mkdir mweb-workspace
+for d in $include; do
+	cp $d/* -t mweb-workspace
+done
+cp "$file" mweb-workspace
+cd mweb-workspace
 @
 

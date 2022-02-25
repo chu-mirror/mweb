@@ -95,12 +95,6 @@ We also preserve the meaning of _content_.
   (lines->content (file->lines file)))
 @
 
-Output consists of two parts.
-
-@[dependencies@]
-(load-option 'format)
-@
-
 ## Parse
 
 Like _stage 1_, we use _MIT scheme_'s parsing library.
@@ -420,7 +414,9 @@ Another class of procedures of same kind.
   (let ((head-attached
           (reverse (map reverse
 		        (fold @{add new line to gathered@} '((((essay-line start)))) parsed-lines)))))
-    (cons (cdr (car head-attached)) (cdr head-attached))))
+    (if (eq? (length (car head-attached)) 1)
+        (cdr head-attached)
+	(cons (cdr (car head-attached)) (cdr head-attached)))))
 @
 
 @[add new line to gathered@]
@@ -551,14 +547,14 @@ Relations between types can be recorded in a directed graph, I use a hash table 
 To gain universality, _MWEB(prototype)_'s conversion of types is based on files.
 @[procedures@]
 (define (content->reference content)
-  (let ((ref @{md5 of content@}))
+  (let ((ref @{file name of content@}))
     (call-with-output-file ref
       (lambda (port)
         (write-string content port)))
     ref))
 @
 
-@[md5 of content@]
+@[file name of content@]
 (bytevector->hexadecimal (md5-string content))
 @
 
@@ -576,36 +572,54 @@ _convert-to_ convert content referenced by _ref_ from _type1_ to _type2_.
     (convert-method ref)))
 @
 
-The values in _relations_ used message passing strategy.
+The values in _relations_ use message passing strategy.
 @[search relations for correct method@]
 ((hash-table-ref relations type1) 'select type2)
 @
 
 @[procedures@]
-(define (make-type-selector)
-  (lambda (msg . args)
-    (let ((targets '()))
-      @{pass msg to type selector@})))
+(define (make-type-selector type)
+  (let ((targets `((,type ,(lambda (ref) ref)))))
+    (lambda (msg . args)
+      (case msg
+        ((new-target) (set! targets (cons args targets)))
+        ((select) (let ((target-type (car args)))
+		    @{build convert method for target-type@}))))))
 @
 
-@[pass msg to type selector@]
-(case msg
-  ((new-target) (set! targets (cons args targets)))
-  ((select) (cadr (assv (car args) targets))))
+@[procedures@]
+(define (new-types . types)
+  (for-each (lambda (type) (hash-table-set! relations type (make-type-selector type))) types))
+@
+
+To convert type1 to type2, _MWEB(prototype)_ allows using some types as medium.  It means that
+type1 might be converted to typeA first, then typeB, typeC, etc, at last type2.  But _MWEB(prototype)_
+assumes that there's only one route starting from type1, ending at type2.  Also, no loop is permitted.
+@[build convert method for target-type@]
+(let ((target (assoc target-type targets)))
+  (if target
+      (cadr target)
+      @{search for indirect conversion@}))
+@
+
+@[search for indirect conversion@]
+(let ((results (map (lambda (t) @{search target-type under target t@}) targets)))
+  (let ((methods (filter (lambda (p) p) (map (lambda (r t) (if r (lambda (ref) (r ((cadr t) ref))) #f)) results targets))))
+    (if (eq? (length methods) 1)
+        (car methods)
+	(error "error: find target type"))))
+@
+
+@[search target-type under target t@]
+(if (equal? (car t) type)
+    #f
+    ((hash-table-ref relations (car t)) 'select target-type))
 @
 
 @[procedures@]
 (define (set-relation! type1 type2 method)
   (let ((selector (hash-table-ref relations type1)))
-    (if selector
-        (selector 'new-target type2 method)
-	@{create new selector@})))
-@
-
-@[create new selector@]
-(let ((new (make-type-selector)))
-  (new 'new-target type2 method)
-  (hash-table-set! relations type1 new))
+    (selector 'new-target type2 method)))
 @
 
 So "plain text" can be defined as:
@@ -626,9 +640,9 @@ special to do this, I specify a default behaviour for it.
 @
 
 @[procedures@]
-(define (accept ref type)
-  (let ((method (hash-table-ref identities type (lambda () file->content))))
-    (method ref)))
+(define (accept recipient ref type)
+  (let ((method (hash-table-ref identities type (lambda () (lambda (rec ref) (file->content ref))))))
+    (method recipient ref)))
 @
 
 @[procedures@]
@@ -637,7 +651,7 @@ special to do this, I specify a default behaviour for it.
 @
 
 @[initialization@]
-(set-identity! "plain text" (lambda (ref) (file->content ref)))
+(set-identity! "plain text" (lambda (rec ref) (file->content ref)))
 @
 
 Then we begin to build _tangle_.  It requires defining new grammar used in code chunks.
@@ -735,33 +749,13 @@ Now, let's continue.
 @
 
 @[import node@]
-(accept (convert-to (tangle-node node nodes) (node 'type) (code-chunk-type chunk))
+(accept info
+        (convert-to (tangle-node node nodes) (node 'type) (code-chunk-type chunk))
         (code-chunk-type chunk))
 @
 
-Sometimes, we also need extra _accept_ process on references, for example, gcc expect _.c_
-suffix on C source code file.
-@[variables@]
-(define representations (make-string-hash-table))
-@
-
-@[procedures@]
-(define (accept-ref ref type)
-  (let ((method (hash-table-ref representations type (lambda () (lambda (x) x)))))
-    (method ref)))
-@
-
-@[procedures@]
-(define (set-representation! type method)
-  (hash-table-set! representations type method))
-@
-
-@[initialization@]
-(set-representation! "plain text" (lambda (ref) ref))
-@
-
 @[get reference of node and convert it to type@]
-(accept-ref (convert-to (tangle-node node nodes) (node 'type) type))
+(convert-to (tangle-node node nodes) (node 'type) type)
 @
 
 ### Weave
@@ -810,17 +804,25 @@ First, we need something to put hands on.
 @[names of bindings for env-exec@]
 mweb-nodes mweb-sections
 @
-
 @[values of bindings for env-exec@]
 nodes (map make-section parsed)
 @
 
-And the core of _MWEB_, type system.
+Then, we need to know how to put hands on.
 @[names of bindings for env-exec@]
-mweb-new-relation mweb-new-identity, mweb-new-representation
+mweb-tangle-node mweb-convert-to reference->content content->reference
+mweb-new-types
+@
+@[values of bindings for env-exec@]
+tangle-node convert-to file->content content->reference
+new-types
 @
 
-@[values of binding for env-exec@]
-set-relation! set-identity! set-representation!
+And the core of _MWEB_, type system.
+@[names of bindings for env-exec@]
+mweb-new-relation mweb-new-identity
+@
+@[values of bindings for env-exec@]
+set-relation! set-identity!
 @
 

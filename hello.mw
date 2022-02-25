@@ -1,0 +1,24 @@
+@[hello world@:C Module@]
+#include <stdio.h>
+
+int main()
+{
+	printf("Hello World!\n");
+}
+@
+
+@[hello world program@:C Program@]
+CFLAGS="-g"
+IN="@[hello world@:C Source@]"
+OUT="hello"
+@
+
+@[compile@]
+
+@{user space@}
+@{types of C code@}
+
+(tangle "hello world program" "Executable")
+@
+
+@i mweb-userspace.mwc c-code.mwc
