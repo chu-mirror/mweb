@@ -6,13 +6,8 @@ Any user can construct his/her own User Space, the following is my implementatio
 @
 
 @[procedures@]
-(define (search-node node-name)
-  (hash-table-ref mweb-nodes node-name (lambda () (error "Can't find node"))))
-
-(define (tangle node-name type)
-  (let ((node (search-node node-name)))
-    (mweb-convert-to (mweb-tangle-node node mweb-nodes)
-      (node 'type) type)))
+(define (get node-name type)
+  (mweb-convert-to (mweb-tangle node-name) (mweb-search-type node-name) type))
 @
 
 @[dependencies@]

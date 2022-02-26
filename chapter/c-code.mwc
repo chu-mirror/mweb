@@ -1,5 +1,5 @@
 @[types of C code@]
-(mweb-new-types "C Module" "C Source" "C Program" "Shell Script" "Side Effect" "Executable")
+(mweb-type "C Module" "C Source" "C Program" "Shell Script" "Side Effect" "Executable")
 (mweb-new-relation "C Module" "C Source"
   (lambda (ref) ref))
 (mweb-new-relation "C Program" "Shell Script"

@@ -5,7 +5,7 @@ another critical part for a complete literate programming system.  We will
 fill this blank in this section to build a complete system, and introduce
 _MWEB_'s innovation to _Literate Programming_.
 
-Having a knowledge of how _MWEB_ deal with _.mw_ files at first might help
+Having a knowledge of how _MWEB_ dealing with _.mw_ files at first might help
 understanding following contents.  _MWEB(prototype)_ is designed consisting of
 three phases of processing: first, preprocessing, synonymous to _C_'s; second,
 declarative part's parsing; third, imperative part's executing.
@@ -17,8 +17,7 @@ in _MWEB(prototype)_, I only add one directive in this phase,
 ```
 to include file, as same as _C_'s _#include_.  This instruction must be put at first of
 a line, all preprocessing instruction should be in this way.  It can be used
-anywhere, to include anything textual, but if you want to include a binary file,
-I wont prevent you.
+anywhere, to include anything textual.
 
 The following two phases are a little confussing, let me explain why I take
 such an approach.  You might have heard of imperative or declarative
@@ -36,7 +35,7 @@ declarative statements to express the spirit of _MWEB_, and put the remaining
 miscellaneous on the imperative part.
 
 The declarative part's grammar is similar to _stage 0_ and _stage 1_ but with
-some extensions, which will be introduced later.
+some extensions, which will be explained later.
 
 The whole program is divided to several parts.
 @[mweb prototype@]
@@ -48,34 +47,33 @@ The whole program is divided to several parts.
 @{initialization@}
 @
 
-## I/O
+## Basic Objects and Parsing
 
-We should redesign I/O procedures, because _MWEB(prototype)_ is supposed to be used
-in a lot of situations despite it's a prototype.
-
-We used to read in whole contents of a file as a string, but in order to do preprocess,
-a new input procedure is used.
+Some basic objects should be defined at starting, this topic focus on how do _MWEB(prototype)_
+represent file's content.  We should redesign these basic objects, because _MWEB(prototype)_
+is supposed to be used in a lot of situations despite it's a prototype.  We used to represent
+whole content of a file as a string, but in order to do preprocess, a new type is used.
 @[procedures@]
 (define (file->lines file)
   (let ((number 0))
     (map (lambda (l) (set! number (+ number 1)) (list l number file))
-         @{lines read from _file_@})))
+         @{lines read from |file|@})))
 @
 
 Every line is labeled with line number and file name.
 @[procedures@]
-(define (line-content line) (car line))
+(define (line-text line) (car line))
 (define (line-number line) (cadr line))
 (define (line-file line) (caddr line))
 @
 
-@[lines read from _file_@]
+@[lines read from |file|@]
 (call-with-input-file file
   (lambda (port)
-    @{lines read from _port_@}))
+    @{lines read from |port|@}))
 @
 
-@[lines read from _port_@]
+@[lines read from |port|@]
 (letrec
   ((get-lines (lambda ()
 	        (let ((line (read-line port)))
@@ -85,17 +83,12 @@ Every line is labeled with line number and file name.
   (get-lines))
 @
 
-We also preserve the meaning of _content_.
+Instead of preserving the meaning of _content_, I use _text_ to stress that the content is textual.
 @[procedures@]
-(define (lines->content lines)
-  (fold-right string-append ""
-    (map (lambda (l) (string-append (line-content l) "\n")) lines)))
-
-(define (file->content file)
-  (lines->content (file->lines file)))
+(define (lines->text lines)
+  (apply string-append
+    (map (lambda (line) (string-append (line-text line) "\n")) lines)))
 @
-
-## Parse
 
 Like _stage 1_, we use _MIT scheme_'s parsing library.
 @[dependencies@]
@@ -104,53 +97,50 @@ Like _stage 1_, we use _MIT scheme_'s parsing library.
 
 But unlike _stage 1_, _MWEB(prototype)_ parse file line by line for a better user experience.
 @[procedures@]
-(define (line->buffer line)
-  (string->parser-buffer (line-content line)))
+(define (line->buffer line) (string->parser-buffer (line-text line)))
 @
 
 Some general matcher and parser macros are defined here.
-
 @[constants@]
 (define char-set:non-whitespace (char-set-invert char-set:whitespace))
 (define char-set:all (char-set-union char-set:non-whitespace char-set:whitespace))
 @
 
-Some head and tail spaces should be ignored.
+In some cases, spaces should be ignored.
 @[macros@]
 (define-*matcher-macro space '(char-set char-set:whitespace))
 (define-*matcher-macro spaces '(+ space))
 (define-*parser-macro skip-spaces '(noise (alt (seq) (spaces))))
 @
 
-_MWEB(prototype)_'s grammar is very simple, parterns can be generalized to:
+_MWEB(prototype)_'s parsing process is very simple, parterns can be generalized to:
 @[macros@]
 (define-*parser-macro (parse-element label parse)
   `(encapsulate (lambda (v) (cons ,label (vector->list v))) ,parse))
 @
-
+Parsed information consists of two parts, a label and a list of values.
 @[procedures@]
-(define (info-type info) (car info))
+(define (info-label info) (car info))
 (define (info-value info) (cdr info))
 @
 
 ## Preprocess
 
-We have only one kind of preprocessing by now, including.
-
-First, define its grammar.
+We have only one kind of preprocessing by now, including.  First, define its grammar.
 
 File names can contain any character other than _"_.
 @[constants@]
 (define char-set:normal-file-name (char-set-difference char-set:non-whitespace (char-set #\")))
+(define char-set:quoted-file-name (char-set-union char-set:normal-file-name char-set:whitespace))
 @
 
 There are three basic elements:
 @[macros@]
 (define-*matcher-macro include-directive '(seq #\@ #\i))
 (define-*matcher-macro file-name '(+ (char-set char-set:normal-file-name)))
-(define-*matcher-macro file-name-quoted '(+ (not-char #\")))
+(define-*matcher-macro file-name-quoted '(+ (char-set char-set:quoted-file_name)))
 @
-The include directive accepts file names containing blanks, but you should quote them.
+_@@i_ directive accepts file names containing blanks, but you should quote them.
 
 We parse an include directive to get a list of file names to include.
 @[macros@]
@@ -158,11 +148,12 @@ We parse an include directive to get a list of file names to include.
   '(parse-element 'include (seq (noise include-directive) @{parsing file names@})))
 @
 
-The directive can accept zero file names.
+The directive can accept zero file names.  _(noise spces)_ rather than _skip-spaces_ here,
+because we need exactly some spaces between _@@i_ and first file name.
 @[parsing file names@]
-(* (seq (noise spaces)
-	(alt (match file-name)
-	     (seq (noise #\") (match file-name-quoted) (noise #\")))))
+(* (seq (noise spaces) 
+        (alt (match file-name)
+             (seq (noise #\") (match file-name-quoted) (noise #\")))))
 @
 
 We might add new directives for preprocessing in future, I prefer keeping the space for extension.
@@ -198,11 +189,11 @@ parse-include-directive
 	(if (null? result)
 	    (iter (cdr input) (append output (list line)))
 	    (case (preprocess-directive-type result)
-	      @{execute preprocess directive@})))))
+	      @{execution of preprocess directives@})))))
 
 @
 
-@[execute preprocess directive@]
+@[execution of preprocess directives@]
 ((include)
  (let ((files (preprocess-directive-args result)))
       (iter (cdr input)
@@ -223,41 +214,97 @@ We have to introduce new grammar for type declaration.
 	@@[code chunk name@@:type@@]
 	contents
 	@@d identifier1 identifier2 ...
+	@@d identifierA identifierB ...
+	...
 	@@
 ```
+@@d means _define_.  Both ways can be used to end a code chunk, but @@ should not be used before @@d.
 
-@@d means _define_.  Both ways can be used to end a code chunk,
-but @@ should not be used before @@d.
-
-Code chunk name and type name are same.
+Code chunk name and type name are of same type, I call them _mweb-identifier_.  They act a same role
+as identifier in programming languages, so, identifer of _MWEB_.
 @[constants@]
-(define char-set:name (char-set-invert (char-set #\@)))
+(define char-set:mweb-identifier (char-set-invert (char-set #\@)))
+(define char-set:mweb-identifier-head
+  (char-set-difference char-set:mweb-identifier char-set:whitespace))
+(define char-set:mweb-identifier-tail
+  (char-set-difference char-set:mweb-identifier char-set:whitespace))
 @
 
 @[macros@]
-(define-*matcher-macro code-chunk-name
-  '(seq (char-set char-set:non-whitespace)
-        (? (seq (* (char-set char-set:name))
-	        (char-set char-set:non-whitespace)))))
-(define-*matcher-macro code-chunk-name-start-directive '(seq #\@ #\[))
-(define-*matcher-macro code-chunk-name-end-directive '(seq #\@ #\]))
-(define-*matcher-macro code-chunk-name-type-seperate-directive '(seq #\@ #\:))
+(define-*matcher-macro mweb-identifier
+  '(seq (char-set char-set:mweb-identifier-head)
+        (? (seq (* (char-set char-set:mweb-identifier))
+	        (char-set char-set:mweb-identifier-tail)))))
 @
 
-Identifier names are like file names in preprocessing, but without quoted form.
-@[constants@]
-(define char-set:identifier-name char-set:non-whitespace)
+As for the text pattern,
+```
+	@@[code chunk name@@:type@@]
+```
+or,
+```
+	@@[code chunk name@@]
+```
+is supposed to be used elsewhere too, so I name it without lossing of generality.
+
+@[macros@]
+(define-*matcher-macro mweb-reference-start-directive '(seq #\@ #\[))
+(define-*matcher-macro mweb-reference-end-directive '(seq #\@ #\]))
+(define-*matcher-macro mweb-reference-type-seperate-directive '(seq #\@ #\:))
 @
 
 @[macros@]
-(define-*matcher-macro identifier-name '(+ (char-set char-set:identifier-name)))
+(define-*parser-macro (parse-mweb-reference label)
+  `(parse-element ,label
+    (seq (noise mweb-reference-start-directive)
+	 skip-spaces
+	 (match mweb-identifier)
+	 skip-spaces
+	 @{parsing type identifier@}
+	 (noise mweb-reference-end-directive))))
+@
+
+If there's no type specified, use type "plain text" as default.
+@[parsing type identifier@]
+(alt (seq (noise mweb-reference-type-seperate-directive)
+          skip-spaces
+          (match mweb-identifier)
+          skip-spaces)
+     (values "plain text"))
+@
+
+Despite what the context of _mweb-reference_'s using, all _mweb-reference_s contain a name and a type.
+@[procedures@]
+(define (mweb-reference-name mweb-ref) (car (info-value mweb-ref)))
+(define (mweb-reference-type mweb-ref) (cadr (info-value mweb-ref)))
+@
+
+Here is normal identifier, identifiers are like file names in preprocessing, but without quoted form
+for nearly no programming language allowing using blanks in their identifiers(_Scheme_ allows though).
+@[constants@]
+(define char-set:identifier char-set:non-whitespace)
+@
+
+@[macros@]
+(define-*matcher-macro identifier '(+ (char-set char-set:identifier)))
 (define-*matcher-macro define-directive '(seq #\@ #\d))
+@
+
+@[macros@]
+(define-*parser-macro parse-defining
+  '(parse-element 'defining
+    (seq (noise define-directive)
+         (* (seq (noise spaces) (match identifier))))))
+@
+
+@[procedures@]
+(define defining-identifiers info-value)
 @
 
 Having introduced new grammar, let's look at content to be parsed in a whole.
 A complete _MWEB_ source file contains, as we have seen in _stage 1_, explanatory text
 and code chunks.  The difference is, we use a line by line parsing strategy now,
-so we can extract useful imformation in a more narrow range.
+so we can extract useful information in a narrower range.
 
 Any line not containing @@ at head can be accept as explanatory text.
 @[macros@]
@@ -268,58 +315,23 @@ Any line not containing @@ at head can be accept as explanatory text.
                 (end-of-input)))))
 @
 
-The pattern:
-```
-	@@[ code chunk name @@: type @@]
-```
-will arise several times in different context, so define a general form.
 @[macros@]
-(define-*parser-macro (parse-code-reference usage)
-  `(parse-element ,usage
-    (seq (noise code-chunk-name-start-directive)
-	 skip-spaces
-	 (match code-chunk-name)
-	 skip-spaces
-	 @{parsing type name@}
-	 (noise code-chunk-name-end-directive))))
-@
-
-If there's no type specified, use type "plain text" as default.
-@[parsing type name@]
-(alt (seq (noise code-chunk-name-type-seperate-directive)
-          skip-spaces
-          (match code-chunk-name)
-          skip-spaces)
-     (values "plain text"))
-@
-
-@[macros@]
-(define-*parser-macro parse-code-chunk-start-line '(parse-code-reference 'start-line))
+(define-*parser-macro parse-code-chunk-start-line '(parse-mweb-reference 'start-line))
 @
 
 @[macros@]
 (define-*parser-macro parse-code-chunk-content-line
   '(parse-element 'content-line
     (match (alt (seq (not-char #\@) (* (char-set char-set:all)))
-	        (seq #\@ (char-set char-set:not-end) (* (char-set char-set:all)))
+	        (seq #\@ (not-char #\d) (* (char-set char-set:all)))
 		(end-of-input)))))
-@
-
-@[constants@]
-(define char-set:not-end (char-set-difference char-set:non-whitespace (char-set #\d #\r)))
 @
 
 @[macros@]
 (define-*parser-macro parse-code-chunk-end-line
   '(parse-element 'end-line
-    (alt @{parsing definition line@}
+    (alt parse-defining
 	 @{parsing end line@})))
-@
-
-@[parsing definition line@]
-(parse-element 'definitions
-  (seq (noise define-directive)
-       (* (seq (noise spaces) (match identifier-name)))))
 @
 
 @[parsing end line@]
@@ -329,97 +341,105 @@ If there's no type specified, use type "plain text" as default.
 @[procedures@]
 (define (parse-lines lines)
   (letrec ((context 'essay)
-           (parse-line @{parse a line according to context@}))
+           (parse-line @{parse a line according to |context|@}))
     (map @{attach parsed information@} lines)))
 @
 
 @[attach parsed information@]
-(lambda (l) (cons (parse-line l) l))
+(lambda (line) (cons (parse-line line) line))
 @
 
 We introduced new data type above.
 @[procedures@]
-(define (parsed-line-info pl) (car pl))
-(define (parsed-line-origin pl) (cdr pl))
-(define (parsed-line-type pl) (info-type (parsed-line-info pl)))
+(define (parsed-line-info parsed-line) (car parsed-line))
+(define (parsed-line-origin parsed-line) (cdr parsed-line))
+(define (parsed-line-type parsed-line) (info-label (parsed-line-info parsed-line)))
 
-(define (is-essay-line? pl) (eq? (parsed-line-type pl) 'essay-line))
+(define (is-essay-line? parsed-line) (eq? (parsed-line-type parsed-line) 'essay-line))
 @
 
 Another class of procedures of same kind.
 @[procedures@]
-(define (code-reference-name code-ref) (car (info-value code-ref)))
-(define (code-reference-type code-ref) (cadr (info-value code-ref)))
+(define (start-line-name parsed-line) (mweb-reference-name (parsed-line-info parsed-line)))
+(define (start-line-type parsed-line) (mweb-reference-type (parsed-line-info parsed-line)))
 
-(define (start-line-name parsed-line) (code-reference-name (parsed-line-info parsed-line)))
-(define (start-line-type parsed-line) (code-reference-type (parsed-line-info parsed-line)))
-
-(define (end-line-type parsed-line) (car (info-value (parsed-line-info parsed-line))))
-(define (end-line-identifiers parsed-line) (cdr (info-value (parsed-line-info parsed-line))))
+(define (end-line-type parsed-line) (info-label (info-value (parsed-line-info parsed-line))))
+(define (end-line-identifiers parsed-line) (defining-identifiers (info-value (parsed-line-info parsed-line))))
 @
 
-
-@[parse a line according to context@]
-(lambda (l)
-  (let ((buffer (line->buffer l)))
+@[parse a line according to |context|@]
+(lambda (line)
+  (let ((buffer (line->buffer line)))
     (case context
-      ((essay) @{parse buffer in essay context@})
-      ((code-start) @{parse buffer in code-start context@})
-      ((code-content) @{parse buffer in code-content context@})
-      ((code-end) @{parse buffer in code-end context@}))))
+      ((essay) @{parse |buffer| in essay context@})
+      ((code-start) @{parse |buffer| in code-start context@})
+      ((code-content) @{parse |buffer| in code-content context@})
+      ((code-end) @{parse |buffer| in code-end context@}))))
 @
 
-@[parse buffer in essay context@]
+We might meet problems when the input file was ill-formed, so some error message is helpful.
+@[procedures@]
+(define (error-in-parsing-lines expect line)
+  (error
+    (string-append
+      "Parsing of " (line-file line)
+      " failed at line " (number->string (line-number line))
+      ": \"" (line-text line) "\"\n"
+      "expect: " expect)))
+@
+
+@[parse |buffer| in essay context@]
 (let* ((parser (*parser parse-essay-line))
        (result (parser buffer)))
   (if result
       (vector-ref result 0)
       (begin
         (set! context 'code-start)
-	(parse-line l))))
+	(parse-line line))))
 @
 
-@[parse buffer in code-start context@]
+@[parse |buffer| in code-start context@]
 (let* ((parser (*parser parse-code-chunk-start-line))
        (result (parser buffer)))
   (if result
       (begin
 	(set! context 'code-content)
         (vector-ref result 0))
-      (error "Some Error")))
+      (error-in-parsing-lines "starting of code chunk" line)))
 @
 
-@[parse buffer in code-content context@]
+@[parse |buffer| in code-content context@]
 (let* ((parser (*parser parse-code-chunk-content-line))
        (result (parser buffer)))
   (if result
       (vector-ref result 0)
       (begin
         (set! context 'code-end)
-	(parse-line l))))
+	(parse-line line))))
 @
 
-@[parse buffer in code-end context@]
+@[parse |buffer| in code-end context@]
 (let* ((parser (*parser parse-code-chunk-end-line))
        (result (parser buffer)))
   (if result
       (vector-ref result 0)
       (begin
         (set! context 'essay)
-	(parse-line l))))
+	(parse-line line))))
 @
 
+Related lines can be combined to a section.
 @[procedures@]
-(define (gather parsed-lines)
+(define (parsed-lines->sections parsed-lines)
   (let ((head-attached
           (reverse (map reverse
-		        (fold @{add new line to gathered@} '((((essay-line start)))) parsed-lines)))))
+		        (fold @{gather a line@} '((((essay-line start)))) parsed-lines)))))
     (if (eq? (length (car head-attached)) 1)
         (cdr head-attached)
 	(cons (cdr (car head-attached)) (cdr head-attached)))))
 @
 
-@[add new line to gathered@]
+@[gather a line@]
 (lambda (parsed-line gathered)
   (let ((p1 (is-essay-line? parsed-line))
         (p2 (is-essay-line? (caar gathered))))
@@ -429,29 +449,31 @@ Another class of procedures of same kind.
 @
 
 @[procedures@]
-(define (parsed-lines-type parsed-lines)
-  (case (parsed-line-type (car parsed-lines))
+(define (section-type section)
+  (case (parsed-line-type (car section))
     ((essay-line) 'essay)
     ((start-line) 'code)))
 @
 
 @[procedures@]
-(define (parsed-lines-content parsed-lines)
-  (lines->content
-    (map parsed-line-origin parsed-lines)))
+(define (section-text section)
+  (lines->text (map parsed-line-origin section)))
 
-(define essay-content parsed-lines-content)
+(define essay-text section-text)
 
 (define (code-chunk-type code-chunk) (start-line-type (car code-chunk)))
 (define (code-chunk-name code-chunk) (start-line-name (car code-chunk)))
-(define (code-chunk-content code-chunk)
-  (parsed-lines-content
+(define (code-chunk-text code-chunk)
+  (section-text
     (filter (lambda (pl) (eq? (parsed-line-type pl) 'content-line)) code-chunk)))
-(define (code-chunk-definitions code-chunk)
-  (fold @{gather definitions@} '() code-chunk))
+(define (code-chunk-defined-identifiers code-chunk)
+  (fold @{gather identifiers@} '() code-chunk))
+
+(define (is-essay? section) (eq? (section-type section) 'essay))
+(define (is-code-chunk? section) (eq? (section-type section) 'code))
 @
 
-@[gather definitions@]
+@[gather identifiers@]
 (lambda (parsed-line gathered)
   (if (and (eq? (parsed-line-type parsed-line) 'end-line)
            (eq? (end-line-type parsed-line) 'definitions))
@@ -461,7 +483,7 @@ Another class of procedures of same kind.
 End this section with a procedure combining all these stuffs.
 @[procedures@]
 (define (parse file)
-  (gather (parse-lines (preprocess (file->lines file)))))
+  (parsed-lines->sections (parse-lines (preprocess (file->lines file)))))
 @
 
 ## Imperative Part
@@ -472,57 +494,68 @@ handle these materials.  The code to be run is also marked by _MWEB(prototype)_,
 so you can refer it by using code chunk name as same as other code chunks.
 
 I will use another programming style instead of functional programming in this part,
-mainly object oriented.
+mainly message passing(also called object oriented).
 
 @[procedures@]
 (define (mweb file exec)
-  (let ((parsed (parse file))
-        (nodes (make-string-hash-table)))
-    (for-each @{push code chunk into nodes@}
-      (filter (lambda (pl) (eq? (parsed-lines-type pl) 'code)) parsed))
-    @{run exec@}))
+  (let ((sections (parse file))
+	@{variables of procedure |mweb|@})
+    @{initialization of procedure |mweb|@}
+    @{run |exec|@}))
 @
 
-A node is simply a list of code chunks with a same name, the default type
-is the type of first code chunk pushed in.
+As we have met in _stage 1_, we usually use _node_ rather than _code chunk_ to think about code.
+@[variables of procedure |mweb|@]
+(nodes (make-string-hash-table))
+@
+
+A node is simply a list of code chunks with a same name, the default type is the type of
+first code chunk appeared.
 @[procedures@]
 (define (make-node type)
-  (let ((code-chunks '())
-	(node-type type))
+  (let ((code-chunks '()))
     (lambda (msg . args)
       (case msg
         ((chunks) code-chunks)
-	((type) node-type)
+	((type) type)
 	((new-chunk) (set! code-chunks (append code-chunks args)))
 	((change-type) (set! node-type (car args)))))))
 @
 
-@[push code chunk into nodes@]
+@[initialization of procedure |mweb|@]
+(for-each @{push code chunk into |nodes|@} (filter is-code-chunk? sections))
+@
+
+@[push code chunk into |nodes|@]
 (lambda (code-chunk)
   (let* ((name (code-chunk-name code-chunk))
 	 (type (code-chunk-type code-chunk))
-         (node (hash-table-ref nodes name @{initialize a new node@})))
+         (node (hash-table-ref nodes name @{initialize a new node with |type|@})))
     (node 'new-chunk code-chunk)))
 @
 
-@[initialize a new node@]
+@[initialize a new node with |type|@]
 (lambda ()
   (let ((new-node (make-node type)))
     (hash-table-set! nodes name new-node)
     new-node))
 @
 
-_exec_ is a normal code chunk name, _MWEB(prototype)_ create a specified environment
-and load the corresponding code to it.
-@[run exec@]
-(let ((env-exec (make-top-level-environment @{bindings for env-exec@})))
-  (load (tangle-node (hash-table-ref nodes exec (lambda () (error "Can not find node"))) nodes)
-        env-exec))
+@[procedures@]
+(define (search-for-node node-name nodes)
+  (hash-table-ref nodes node-name (lambda () (error "Can not find node " node-name))))
 @
 
-@[bindings for env-exec@]
-'(@{names of bindings for env-exec@})
-(list @{values of bindings for env-exec@})
+_exec_ is a normal code chunk name, _MWEB(prototype)_ create a specified environment
+and load the corresponding code to it.
+@[run |exec|@]
+(let ((user-space (make-top-level-environment @{bindings for |user-space|@})))
+  (load @{tangle to get |exec|@} user-space))
+@
+
+@[bindings for |user-space|@]
+'(@{names of bindings for |user-space|@})
+(list @{values of bindings for |user-space|@})
 @
 
 ### Tangle
@@ -540,45 +573,56 @@ will be inserted.
 
 But before we give definition to "plain text", we build a framework for later extension of types.
 Relations between types can be recorded in a directed graph, I use a hash table to implement it.
-@[variables@]
-(define relations (make-string-hash-table))
+@[variables of procedure |mweb|@]
+(relations (make-string-hash-table))
 @
 
-To gain universality, _MWEB(prototype)_'s conversion of types is based on files.
+To gain universality, _MWEB(prototype)_'s conversion of types is based on files.  _content_ does not
+only mean textual content, but any binary content.
 @[procedures@]
 (define (content->reference content)
-  (let ((ref @{file name of content@}))
-    (call-with-output-file ref
+  (let ((reference (bytevector->hexadecimal (md5-bytevector content))))
+    (call-with-binary-output-file reference
       (lambda (port)
-        (write-string content port)))
-    ref))
-@
+        (write-bytevector content port)))
+    reference))
 
-@[file name of content@]
-(bytevector->hexadecimal (md5-string content))
+(define (reference->content reference)
+  (call-with-binary-input-file reference
+    (lambda (port)
+      (read-bytevector (expt 2 20) port)))) ; 1MB is enough, I think
 @
 
 Some auxiliary procedures.
 @[procedures@]
-(define (combine-references refs)
+(define (combine-references references)
   (content->reference
-    (fold-right string-append "" (map file->content refs))))
+    (apply bytevector-append (map reference->content references))))
+
+(define (content->text content)
+  (utf8->string content))
+
+(define (reference->text reference)
+  (content->text (reference->content reference)))
+
+(define (text->content text)
+  (string->utf8 text))
+
+(define (text->reference text)
+  (content->reference (text->content text)))
 @
 
-_convert-to_ convert content referenced by _ref_ from _type1_ to _type2_.
+One of core procedures of _MWEB_, search _relations_ to convert content of _reference_
+from _type-from_ to _type-to_.
 @[procedures@]
-(define (convert-to ref type1 type2)
-  (let ((convert-method @{search relations for correct method@}))
-    (convert-method ref)))
+(define (convert-to relations reference type-from type-to)
+  (let ((convert-method ((hash-table-ref relations type-from) 'select type-to)))
+    (convert-method reference)))
 @
 
 The values in _relations_ use message passing strategy.
-@[search relations for correct method@]
-((hash-table-ref relations type1) 'select type2)
-@
-
 @[procedures@]
-(define (make-type-selector type)
+(define (make-type-selector relations type)
   (let ((targets `((,type ,(lambda (ref) ref)))))
     (lambda (msg . args)
       (case msg
@@ -587,9 +631,10 @@ The values in _relations_ use message passing strategy.
 		    @{build convert method for target-type@}))))))
 @
 
+If you want to use a type, you must declare it first.
 @[procedures@]
-(define (new-types . types)
-  (for-each (lambda (type) (hash-table-set! relations type (make-type-selector type))) types))
+(define (new-types relations . types)
+  (for-each (lambda (type) (hash-table-set! relations type (make-type-selector relations type))) types))
 @
 
 To convert type1 to type2, _MWEB(prototype)_ allows using some types as medium.  It means that
@@ -607,7 +652,11 @@ assumes that there's only one route starting from type1, ending at type2.  Also,
   (let ((methods (filter (lambda (p) p) (map (lambda (r t) (if r (lambda (ref) (r ((cadr t) ref))) #f)) results targets))))
     (if (eq? (length methods) 1)
         (car methods)
-	(error "error: find target type"))))
+	(error "Failed at finding method"
+               (error-irritant/noise " converting from type ")
+	       type
+	       (error-irritant/noise "to")
+	       target-type))))
 @
 
 @[search target-type under target t@]
@@ -617,13 +666,13 @@ assumes that there's only one route starting from type1, ending at type2.  Also,
 @
 
 @[procedures@]
-(define (set-relation! type1 type2 method)
-  (let ((selector (hash-table-ref relations type1)))
-    (selector 'new-target type2 method)))
+(define (set-relation! relations type-from type-to method)
+  (let ((selector (hash-table-ref relations type-from)))
+    (selector 'new-target type-to method)))
 @
 
 So "plain text" can be defined as:
-@[initialization@]
+@[initialization of procedure |mweb|@]
 (hash-table-set! relations "plain text"
   (lambda (msg . args)
     (case msg
@@ -635,23 +684,20 @@ As you can see, "plain text" does none thing, it's a special type that can conve
 Also the accepting part, implemented by hash table too.  It's much simpler, for any type only
 cares about its own identity's maintenance.  But because most types do not have to do anything
 special to do this, I specify a default behaviour for it.
-@[variables@]
-(define identities (make-string-hash-table))
+@[variables of procedure |mweb|@]
+(identities (make-string-hash-table))
 @
 
 @[procedures@]
-(define (accept recipient ref type)
-  (let ((method (hash-table-ref identities type (lambda () (lambda (rec ref) (file->content ref))))))
-    (method recipient ref)))
+(define (accept identities recipient reference type)
+  (let ((method (hash-table-ref identities type
+                  (lambda () (lambda (recipient reference) (reference->text reference))))))
+    (method recipient reference)))
 @
 
 @[procedures@]
-(define (set-identity! type method)
+(define (set-identity! identities type method)
   (hash-table-set! identities type method))
-@
-
-@[initialization@]
-(set-identity! "plain text" (lambda (rec ref) (file->content ref)))
 @
 
 Then we begin to build _tangle_.  It requires defining new grammar used in code chunks.
@@ -703,59 +749,63 @@ Now, let's continue.
 
 @[parse normal code content@]
 (parse-element 'normal-content
-  (encapsulate (lambda (v) (fold-right string-append "" (vector->list v)))
+  (encapsulate (lambda (v) (apply string-append (vector->list v)))
     (+ (alt (match normal-code-content)
             (map (lambda (e) "@") (match "@@"))))))
 @
 
 @[parse reference@]
-(parse-code-reference 'reference)
+(parse-mweb-reference 'reference)
 @
 
 @[parse import@]
 (parse-element 'import
   (seq (noise import-start-directive)
        skip-spaces
-       (match code-chunk-name)
+       (match mweb-identifier)
        skip-spaces
        (noise import-end-directive)))
 @
 
 @[procedures@]
-(define (tangle-node node nodes)
-  (combine-references (map (lambda (chunk) (tangle-chunk chunk nodes)) (node 'chunks))))
+(define (tangle-node node nodes relations identities)
+  (combine-references (map (lambda (chunk) (tangle-chunk chunk nodes relations identities)) (node 'chunks))))
+@
+
+@[tangle to get |exec|@]
+(tangle-node (search-for-node exec nodes) nodes relations identities)
 @
 
 @[procedures@]
-(define (tangle-chunk chunk nodes)
-  (let* ((content (code-chunk-content chunk))
-         (parsed (vector-ref ((*parser parse-code-chunk) (string->parser-buffer content)) 0)))
-    (content->reference
-      (fold-right string-append ""
-        (map @{import or reference other node@} parsed)))))
+(define (tangle-chunk chunk nodes relations identities)
+  (let* ((text (code-chunk-text chunk))
+         (parsed (vector-ref ((*parser parse-code-chunk) (string->parser-buffer text)) 0)))
+    (text->reference
+      (apply string-append (map @{import or reference other node@} parsed)))))
 @
 
 @[import or reference other node@]
 (lambda (info)
-  (case (info-type info)
+  (case (info-label info)
     ((normal-content) (car (info-value info)))
     ((import)
-      (let ((node (hash-table-ref nodes (car (info-value info)))))
-        @{import node@}))
+      (let ((node (search-for-node (car (info-value info)) nodes)))
+        @{import |node|@}))
     ((reference)
-      (let ((node (hash-table-ref nodes (car (info-value info))))
+      (let ((node (search-for-node (car (info-value info)) nodes))
             (type (cadr (info-value info))))
-	@{get reference of node and convert it to type@}))))
+	@{get reference of |node| and convert it to |type|@}))))
 @
 
-@[import node@]
-(accept info
-        (convert-to (tangle-node node nodes) (node 'type) (code-chunk-type chunk))
+@[import |node|@]
+(accept identities
+        (cons parsed info)
+        (convert-to relations (tangle-node node nodes relations identities) (node 'type) (code-chunk-type chunk))
         (code-chunk-type chunk))
 @
 
-@[get reference of node and convert it to type@]
-(convert-to (tangle-node node nodes) (node 'type) type)
+@[get reference of |node| and convert it to |type|@]
+(convert-to relations (tangle-node node nodes relations identities) (node 'type) type)
 @
 
 ### Weave
@@ -765,29 +815,29 @@ and can write _weave_ themselves.  So the major part of _weave_ will be put in U
 What I will do in this section is giving a pretty wrapper on these information.
 
 @[procedures@]
-(define (make-section parsed-lines)
-  (let ((type (parsed-lines-type parsed-lines)))
+(define (make-section section)
+  (let ((type (section-type section)))
     (case type
-      ((code) (make-code-section parsed-lines))
-      ((essay) (make-essay-section parsed-lines)))))
+      ((code) (make-code-section section))
+      ((essay) (make-essay-section section)))))
 
-(define (make-code-section parsed-lines)
+(define (make-code-section section)
   (let ((type 'code)
-	(code-name (code-chunk-name parsed-lines))
-	(code-type (code-chunk-type parsed-lines))
-        (code-content (code-chunk-content parsed-lines))
-	(definitions (code-chunk-definitions parsed-lines)))
+	(code-name (code-chunk-name section))
+	(code-type (code-chunk-type section))
+        (code-text (code-chunk-text section))
+	(identifiers (code-chunk-defined-identifiers section)))
     (lambda (msg . args)
       (case msg
 	((type) type)
         ((code-name) code-name)
 	((code-type) code-type)
-	((code-content) code-content)
-	((definitions) definitions)))))
+	((code-text) code-text)
+	((identifiers) identifiers)))))
 
-(define (make-essay-section parsed-lines)
+(define (make-essay-section section)
   (let ((type 'essay)
-        (content (essay-content parsed-lines)))
+        (content (essay-text section)))
     (lambda (msg . args)
       (case msg
 	((type) type)
@@ -800,29 +850,42 @@ This section defines _exec_'s execution environment.  Although _MWEB(prototype)_
 are supposed to read source code of _MWEB(prototype)_ to have an overall knowledge
 of whole system, there's no need to expose all identifiers defined above.
 
-First, we need something to put hands on.
-@[names of bindings for env-exec@]
-mweb-nodes mweb-sections
+Let's think of what users are going to do in User Space one by one, build corresponding
+environment for these actions.
+
+First, they are going to define types, and set relations between them.  This is the core part
+of _MWEB_ after all.
+@[names of bindings for |user-space|@]
+mweb-type mweb-new-relation mweb-search-type
 @
-@[values of bindings for env-exec@]
-nodes (map make-section parsed)
+@[values of bindings for |user-space|@]
+(lambda types
+  (apply new-types (cons relations types)))
+(lambda (type-from type-to method)
+  (set-relation! relations type-from type-to method))
+(lambda (node-name)
+  ((search-for-node node-name nodes) 'type))
 @
 
-Then, we need to know how to put hands on.
-@[names of bindings for env-exec@]
-mweb-tangle-node mweb-convert-to reference->content content->reference
-mweb-new-types
+Then, they ought to be able to define converting methods.  This require them being familiar with
+concept of reference, content and text.  But usually, user do not want to handle binary content
+in context of _MIT Scheme_, so what they really want is reference and text.
+@[names of bindings for |user-space|@]
+reference->content content->reference
+mweb-convert-to
 @
-@[values of bindings for env-exec@]
-tangle-node convert-to file->content content->reference
-new-types
+@[values of bindings for |user-space|@]
+reference->text text->reference
+(lambda (reference type-from type-to)
+  (convert-to relations reference type-from type-to))
 @
 
-And the core of _MWEB_, type system.
-@[names of bindings for env-exec@]
-mweb-new-relation mweb-new-identity
+And most importantly, they should be able to tangle something.
+@[names of bindings for |user-space|@]
+mweb-tangle
 @
-@[values of bindings for env-exec@]
-set-relation! set-identity!
+@[values of bindings for |user-space|@]
+(lambda (node-name)
+  (tangle-node (search-for-node node-name nodes) nodes relations identities))
 @
 
