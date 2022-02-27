@@ -26,8 +26,8 @@ shift; shift
 
 include="$@"
 
-if [ -z "$include" ]; then
-	include="$HOME/.mweb-lib"
+if [ -d ".mweb-lib" ]; then
+	include="$HOME/.mweb-lib $include"
 fi
 @
 
