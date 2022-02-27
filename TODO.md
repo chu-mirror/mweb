@@ -1,2 +1,3 @@
-1. Add warning for unused nodes, or undefined nodes
+- Add warning for undefined nodes (done)
+- Improve parsing strategy for "@@"
 

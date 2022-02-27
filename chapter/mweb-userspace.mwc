@@ -1,16 +1,50 @@
-Any user can construct his/her own User Space, the following is my implementation.
+# MWEB(prototype) User Space
+
+ALl users of _MWEB(prototype)_ are able to implement their own user space, the following is
+my implementation.
 
 @[user space@]
-@{dependencies@}
-@{procedures@}
+@{dependencies of user space@}
+@{procedures of user space@}
+@{initialization of user space@}
 @
 
-@[procedures@]
-(define (get node-name type)
+In most cases, what we want is not merely tangling a node, but also converting that node to
+another type, for example, if you wrote a C program, tangled the node of that C program's
+source code, you could get is a C source file, rather than an executable file.
+@[procedures of user space@]
+(define (tangle-as node-name type)
   (mweb-convert-to (mweb-tangle node-name) (mweb-search-type node-name) type))
 @
 
-@[dependencies@]
+A lot of convertings are delegated to other programs.
+@[dependencies of user space@]
 (load-option 'synchronous-subprocess)
+@
+
+## Types
+
+### Shell Script
+
+### C code
+
+@[initialization of user space@]
+(mweb-type "C Module" "C Source" "C Program" "Shell Script" "Side Effect" "Executable")
+(mweb-new-relation "C Module" "C Source"
+  (lambda (ref) ref))
+(mweb-new-relation "C Program" "Shell Script"
+  (lambda (ref) @{extend to compiling script@}))
+(mweb-new-relation "Shell Script" "Side Effect"
+  (lambda (ref) (run-shell-command (string-append "sh " ref)) ref))
+(mweb-new-relation "Side Effect" "Executable"
+  (lambda (ref) ref))
+@
+
+@[extend to compiling script@]
+(content->reference
+  (string-append "#!/bin/sh\n"
+                 (reference->content ref) "\n"
+		 "for f in $IN; do cp $f $f.c; INFILES=\"$INFILES $f.c\"; done\n"
+		 "gcc $CFLAGS -o $OUT $INFILES"))
 @
 

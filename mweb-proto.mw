@@ -610,6 +610,9 @@ Some auxiliary procedures.
 
 (define (text->reference text)
   (content->reference (text->content text)))
+
+(define (file->reference file)
+  (content->reference (reference->content file)))
 @
 
 One of core procedures of _MWEB_, search _relations_ to convert content of _reference_
@@ -871,11 +874,11 @@ Then, they ought to be able to define converting methods.  This require them bei
 concept of reference, content and text.  But usually, user do not want to handle binary content
 in context of _MIT Scheme_, so what they really want is reference and text.
 @[names of bindings for |user-space|@]
-reference->content content->reference
+reference->content content->reference file->reference
 mweb-convert-to
 @
 @[values of bindings for |user-space|@]
-reference->text text->reference
+reference->text text->reference file->reference
 (lambda (reference type-from type-to)
   (convert-to relations reference type-from type-to))
 @

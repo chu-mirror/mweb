@@ -14,11 +14,9 @@ OUT="hello"
 @
 
 @[compile@]
-
 @{user space@}
-@{types of C code@}
 
-(get "hello world program" "Executable")
+(tangle-as "hello world program" "Executable")
 @
 
-@i mweb-userspace.mwc c-code.mwc
+@i mweb-userspace.mwc
