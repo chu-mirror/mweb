@@ -16,7 +16,7 @@ echo "(mweb \"$file\" \"$exec\")" | mit-scheme --no-init-file --load mweb-proto.
 
 @[handle arguments@]
 if [ $# -lt 2 ]; then
-	echo "usage: $0 node exec [include-directory]..."
+	echo "usage: $0 file exec [include-directory]..."
 	exit 1
 fi
 

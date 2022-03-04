@@ -1,21 +1,27 @@
-@[hello world@:C Module@]
-#include <stdio.h>
+The following is a classic _Hello World!_ program for presentation of _MWEB(prototype)_.
 
+The grammar of _MWEB(prototype)_ is straightforwart, the basic elements you should deal with are only code chunks,
+each code chunk has a name and a type.  "hello world" is a code chunk with type "C module with Basic I/O".
+@[hello world@:C Module with Basic I/O@]
 int main()
 {
 	printf("Hello World!\n");
 }
 @
 
+"hello world program" describes an executable program, _CFLAGS_ used in compiling, source files involved,
+the final executable file's name, etc.
 @[hello world program@:C Program@]
 CFLAGS="-g"
 IN="@[hello world@:C Source@]"
 OUT="hello"
 @
 
-@[compile@]
+"tangle" is a term of _Literate Programming_, means turning a description of program to something machine accept.
+_MWEB(prototype)_ is unlike other _Literate Programming_ tools, this process is written entirely by users
+using _MIT Scheme_ code.
+@[tangle@]
 @{user space@}
-
 (tangle-as "hello world program" "Executable")
 @
 

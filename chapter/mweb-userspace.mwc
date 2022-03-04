@@ -24,23 +24,31 @@ A lot of convertings are delegated to other programs.
 
 ## Types
 
-### Shell Script
-
 ### C code
 
+Some definitions of types related to C programming language.
 @[initialization of user space@]
-(mweb-type "C Module" "C Source" "C Program" "Shell Script" "Side Effect" "Executable")
+(mweb-type "C Module with Basic I/O" "C Module" "C Source"
+  "C Program" "Shell Script" "Side Effect" "Executable")
+(mweb-new-relation "C Module with Basic I/O" "C Module"
+  (lambda (ref) @{add standard I/O header file to |ref|@}))
 (mweb-new-relation "C Module" "C Source"
   (lambda (ref) ref))
 (mweb-new-relation "C Program" "Shell Script"
-  (lambda (ref) @{extend to compiling script@}))
+  (lambda (ref) @{extend |ref| to compiling script@}))
 (mweb-new-relation "Shell Script" "Side Effect"
   (lambda (ref) (run-shell-command (string-append "sh " ref)) ref))
 (mweb-new-relation "Side Effect" "Executable"
   (lambda (ref) ref))
 @
 
-@[extend to compiling script@]
+@[add standard I/O header file to |ref|@]
+(content->reference
+  (string-append "#include <stdio.h>\n"
+                 (reference->content ref)))
+@
+
+@[extend |ref| to compiling script@]
 (content->reference
   (string-append "#!/bin/sh\n"
                  (reference->content ref) "\n"
