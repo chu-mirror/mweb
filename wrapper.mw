@@ -11,7 +11,7 @@ The major function of this wrapper is building a tuned environment for _MWEB(pro
 @{handle arguments@}
 @{build environment@}
 
-echo "(mweb \"$file\" \"$exec\")" | mit-scheme --no-init-file --load mweb-proto.scm 
+echo "(mweb \"$file\" \"$exec\")" | mit-scheme --no-init-file --load ~/.scheme-lib/mweb-proto.scm 
 @
 
 @[handle arguments@]
