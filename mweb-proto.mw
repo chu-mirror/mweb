@@ -620,7 +620,12 @@ from _type-from_ to _type-to_.
 @[procedures@]
 (define (convert-to relations reference type-from type-to)
   (let ((convert-method ((hash-table-ref relations type-from) 'select type-to)))
-    (convert-method reference)))
+    (if convert-method
+        (convert-method reference)
+	(error "Failed at converting"
+	       type-from
+	       (error-irritant " to")
+	       type-to))))
 @
 
 The values in _relations_ use message passing strategy.
@@ -651,21 +656,32 @@ assumes that there's only one route starting from type1, ending at type2.  Also,
 @
 
 @[search for indirect conversion@]
-(let ((results (map (lambda (t) @{search target-type under target t@}) targets)))
-  (let ((methods (filter (lambda (p) p) (map (lambda (r t) (if r (lambda (ref) (r ((cadr t) ref))) #f)) results targets))))
-    (if (eq? (length methods) 1)
-        (car methods)
-	(error "Failed at finding method"
-               (error-irritant/noise " converting from type ")
-	       type
-	       (error-irritant/noise "to")
-	       target-type))))
+(let ((methods @{search methods under |targets| for indirect conversion to |target-type|@}))
+  (case (length methods)
+    ((1) (car methods))
+    ((0) #f)
+    (else (error "More than one path"
+                 (error-irritant/noise " converting from type ")
+                 type
+	         (error-irritant/noise " to "
+	         target-type)))))
+@
+There are two kinds of possible type, some types this _type_ can convert to and
+the type itself.  The indirect conversion does not go througn the type itself.
+@[search methods under |targets| for indirect conversion to |target-type|@]
+(filter procedure?
+  (map (lambda (t)
+         (if (equal? (car t) type)
+	     #f
+	     @{construct conversion from |type| to |target-type|@}))
+       targets))
 @
 
-@[search target-type under target t@]
-(if (equal? (car t) type)
-    #f
-    ((hash-table-ref relations (car t)) 'select target-type))
+@[construct conversion from |type| to |target-type|@]
+(let ((next ((hash-table-ref relations (car t)) 'select target-type)))
+  (if next
+      (lambda (ref) (next ((cadr t) ref)))
+      #f))
 @
 
 @[procedures@]
