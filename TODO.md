@@ -1,4 +1,4 @@
 - Add warning for undefined nodes (done)
 - Improve parsing strategy for "@@"
 - Fix bug in type searching (done)
-- Consider a new design of type system
+- Consider a new design of type system (done)
