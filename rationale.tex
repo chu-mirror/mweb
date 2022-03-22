@@ -1,0 +1,65 @@
+% Citation Style, I adopt MLA here
+\newcount\refcount
+\refcount=0
+\def\ref#1#2#3{\global\advance\refcount by 1
+\frenchspacing % follow suggestion of The-TeXbook
+\item{[\the\refcount]} #1. {\sl #2}. #3 \smallskip}
+
+\beginsection Program and Process\par
+
+Softwares, from a user's perspective, they are something running, handling some input,
+producing some output, performing some tasks, but where are they?  You might say that they are in
+smartphones, or if you have some backgound knowledge, any electronic device.  Well, but,
+suppose that I have a software named {\tt AplusB}, it only do a simple job, you tell it two numbers,
+and it reply to you with a sum of those numbers.  It's a software, you have no difficulty
+in imagining installing it to your treasured iphone of newest generation.  Now let's assume that a people do the
+same job for you, namely summing up two numbers you give, then you have a software installed on
+that people literally, congratulations.  So what are softwares, it seems like they can be anywhere,
+they are something untouchable, like spirits.
+But as a creation, softwares comes from human's intelligent activities, and are not different
+to any other creations, paintings, novels, or buildings.  What I want to say is that,
+they are understandable to human beings, and as a consequence, they are descriptable.
+Back to the first sentence, what can you say about a software? It's not hard to give a general
+description, like I have done for my simple {\tt AplusB}.  If your description can result
+in some actions doing what you want, the accumulated actions, we call it software,
+and your description, is exactly a program, and the activity you giving a description,
+is programming.
+
+Another question shows up immediately, how can we even get all these actions by only a description,
+it's not at all arcane, there are some entities able to understand our description
+and do what we want them to do.  If you are smart enough, you may notice that the entities are
+just other softwares, the behaviour of that people to compute {\tt AplusB} is a software,
+the behaviour of electronic devices to go through bits to run {\tt AplusB} is a software.
+It's kind of confussing to continue using software as the name for your new impression of these
+pretty creatures, let's adopt the term from {\sl SICP}, {\it process} [1].
+
+Conclusion and introducing of a new term, the relation between program and software,
+now program and process, is {\it interpretation}.  A program is interpreted to a process by another process.
+
+\beginsection Literate Programming, MWEB's approach\par
+
+From the previous section, we know that programming is all about giving description to process you want
+to create, and apparently the description you give is not for human's reading but another process's interpretating.
+{\it Literate~Programming} is a programming paradigm against this nature of programming [2], introduced by
+Donald Knuth, it regards description of a process as both a program to be interpreted and a document written
+for human beings.  I will not stress the benefits of it here, the paper by Donald~Knuth gives
+a perfect explanation for it.
+
+In general terms, {\tt MWEB} is yet another literate programming tool, it improved the classic paradigm
+by introducing a type system.  Consider the final process a program interpreted to, it's not only
+influenced by the program but also the process doing interpret.  For example, you have a C program,
+you can compile and link it to build a machine program interpreted by particular combination of operating system
+and hardware to result in a normal process, but also, you can pass an argument {\tt -g} to the compiler
+to result in a different process able to be debugged.  Same program, but different processes.
+{\tt MWEB} bring in the causing of different processes to consideration.  This is
+the key difference between classic approach and {\tt MWEB}'s approach, {\it classic literate programming
+regards a program as the object being described, {\tt MWEB} regards a process as the object being described}.
+
+\beginsection MWEB's type system\par
+
+\beginsection Bibliography\par
+
+\ref {Abelson, Sussman, and Sussman} {Structure and Interpretation of Computer Programs}{MIT Press, 1984}
+\ref {Donald E. Knuth} {Literate Programming} {1984}
+
+\bye

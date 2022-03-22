@@ -10,4 +10,4 @@ install:
 	cp -f mweb-proto -t ${PREFIX}/bin
 
 clean:
-	rm -rf ${SRC} mweb-lib
+	rm -rf ${SRC} mweb-lib *.log *.pdf
