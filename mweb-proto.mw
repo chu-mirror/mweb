@@ -519,7 +519,7 @@ first code chunk appeared.
         ((chunks) code-chunks)
 	((type) type)
 	((new-chunk) (set! code-chunks (append code-chunks args)))
-	((change-type) (set! node-type (car args)))))))
+	((change-type) (set! type (car args)))))))
 @
 
 @[initialization of procedure |mweb|@]
@@ -884,6 +884,14 @@ mweb-type mweb-new-relation mweb-search-type
   (set-relation! relations type-from type-to method))
 (lambda (node-name)
   ((search-for-node node-name nodes) 'type))
+@
+As an extension, they may want to change a node's type.
+@[names of bindings for |user-space|@]
+mweb-change-type
+@
+@[values of bindings for |user-space|@]
+(lambda (node-name new-type)
+  ((search-for-node node-name nodes) 'change-type new-type))
 @
 
 Then, they ought to be able to define converting methods.  This require them being familiar with
