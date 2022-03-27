@@ -624,7 +624,7 @@ from _type-from_ to _type-to_.
         (convert-method reference)
 	(error "Failed at converting"
 	       type-from
-	       (error-irritant " to")
+	       (error-irritant/noise " to")
 	       type-to))))
 @
 
@@ -663,8 +663,8 @@ assumes that there's only one route starting from type1, ending at type2.  Also,
     (else (error "More than one path"
                  (error-irritant/noise " converting from type ")
                  type
-	         (error-irritant/noise " to "
-	         target-type)))))
+	         (error-irritant/noise " to ")
+	         target-type))))
 @
 There are two kinds of possible type, some types this _type_ can convert to and
 the type itself.  The indirect conversion does not go througn the type itself.

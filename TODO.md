@@ -2,3 +2,4 @@
 - Improve parsing strategy for "@@"
 - Fix bug in type searching (done)
 - Consider a new design of type system (done)
+- Discard "plain text"
