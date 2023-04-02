@@ -39,15 +39,15 @@ As you might guess, the code chunks used in this stage also follow the new
 syntax defined by this stage, but add something new inside code chunks.
 Let's define the elements of MWEB stage1 one by one.
 
-TEXT: the comments are of this type.
+TEXT: the comments are of this type. The character '@' will be used as escape
+character in future. Even it doesn't have much power in this stage, I decide to
+treat it specially.
 @[stage 1@]
 (define-*matcher-macro text `(+ (alt "@@" (not-char #\@))))
 @
 
-NAME: the name of code chunks is of this type, starting with an alphabet
-or number, and ending with an alphabet or a number.  This is my preference,
-formal specification of MWEB will not involve this limitation, but the leading
-and ending blanks will be ignored both here and formal specification.
+NAME: the name of code chunks is of this type, its first and last character
+can not be a whitespace.
 @[stage 1@]
 (define char-set:non-whitespace (char-set-invert char-set:whitespace))
 (define-*matcher-macro name
@@ -60,14 +60,15 @@ and ending blanks will be ignored both here and formal specification.
 
 CODE: the contents of a code chunk, unlike TEXT, "@{" and "@}" are introduced into
 contents of code to reference other code chunks.  So we have a more complicated
-definition.
+definition.  There are further use of '@' in code chunk, but "@\n" always mean
+the ending of a code chunk.
 @[stage 1@]
 (define-*matcher-macro code
   `(* (alt (not-char #\@)
 	   (seq #\@ (not-char #\newline)))))
 @
 
-Then the parse processes, we do not use explaining text now, just ignore them.
+Then the parsing processes, we do not use explaining text now, just ignore them.
 @[stage 1@]
 (define-*parser-macro mweb-stage-1
   `(* (seq (? explain-text)

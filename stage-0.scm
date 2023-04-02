@@ -4,7 +4,7 @@
 (define (tangle file)
   (combine (extract-code-chunks (get-content file))))
 
-;; The code chunks are just strings now, combine them by concating them one by one
+;; The code chunks are just text appearing in order for now, combine them by concating them one by one
 ;; to build the final program of stage 1.
 (define (combine chunks)
   (fold-left string-append "" chunks))
