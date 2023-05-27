@@ -1,9 +1,19 @@
 # MWEB
 
 There are two versions planned, but only one available now.
-
 ```
 $ make proto
+```
+You should install mit-scheme first to compile it.
+
+To install by:
+```
+$ sudo make install
+```
+
+To uninstall by:
+```
+$sudo make uninstall
 ```
 
 ## References
